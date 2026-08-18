@@ -1,0 +1,90 @@
+// Schema do Gestor de Investimento — livro-razão do portefólio familiar
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  @@map("users")
+}
+
+// Um ativo do portefólio: ação, ETF, cripto, imóvel, depósito, poupança...
+// A categoria é texto livre, definida pelo próprio utilizador.
+model Asset {
+  id         String   @id @default(cuid())
+  name       String
+  category   String
+  currency   String   @default("EUR")
+  notes      String?
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  transactions Transaction[]
+  valuations   ValuationSnapshot[]
+
+  @@index([category])
+  @@map("assets")
+}
+
+// Tipo de movimento no livro-razão. O efeito de cada tipo no cost basis /
+// rendimento está definido em src/lib/calculations.ts (TX_META), não aqui.
+enum TransactionType {
+  BUY // compra de unidades (ações, ETFs, cripto...)
+  SELL // venda de unidades
+  DEPOSIT // entrada de capital num ativo sem "unidades" (depósito, poupança, imóvel)
+  WITHDRAWAL // saída de capital de um ativo sem "unidades"
+  DIVIDEND // rendimento recebido, não altera o cost basis
+  INTEREST // juros recebidos, não altera o cost basis
+  FEE // custo/comissão, aumenta o cost basis (reduz o P/L)
+}
+
+// Uma linha do livro-razão. Append-only por natureza: editar só para
+// corrigir erros de introdução, nunca para "ajustar" ao valor de mercado —
+// isso é o papel do ValuationSnapshot.
+model Transaction {
+  id        String          @id @default(cuid())
+  assetId   String
+  asset     Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type      TransactionType
+  date      DateTime
+  quantity  Float? // null para ativos sem unidades (depósitos, imóveis...)
+  unitPrice Float?
+  amount    Float // valor sempre positivo; o sinal/efeito vem do `type`
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([assetId, date])
+  @@index([date])
+  @@map("transactions")
+}
+
+// Marcação manual e periódica do valor de mercado de um ativo, independente
+// das transações. É a partir daqui que se calcula o valor atual e o
+// desempenho ao longo do tempo.
+model ValuationSnapshot {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  date      DateTime
+  value     Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([assetId, date])
+  @@index([assetId, date])
+  @@map("valuation_snapshots")
+}
