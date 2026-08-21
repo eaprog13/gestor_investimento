@@ -1,15 +1,20 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/auth/password";
-import { createSession } from "@/lib/auth/session";
+import { headers } from "next/headers";
+import { criarClienteServidor } from "@/lib/supabase/server";
+import { verificarLimiteLogin } from "@/lib/security/rateLimit";
 import { loginSchema } from "@/lib/validation";
 
 export type ActionState = {
   status: "idle" | "error";
   message?: string;
 };
+
+async function obterIp() {
+  const cabecalhos = await headers();
+  return cabecalhos.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "desconhecido";
+}
 
 export async function login(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = loginSchema.safeParse({
@@ -21,21 +26,21 @@ export async function login(_prevState: ActionState, formData: FormData): Promis
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  let user;
-  try {
-    user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  } catch {
-    return {
-      status: "error",
-      message: "Não foi possível ligar à base de dados. Confirma o DATABASE_URL no .env.",
-    };
+  const ip = await obterIp();
+  const { sucesso } = await verificarLimiteLogin(`${parsed.data.email}:${ip}`);
+  if (!sucesso) {
+    return { status: "error", message: "Demasiadas tentativas. Tenta de novo daqui a um minuto." };
   }
 
-  if (!user || !verifyPassword(parsed.data.password, user.passwordHash)) {
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
+
+  if (error) {
     return { status: "error", message: "Credenciais inválidas." };
   }
-
-  await createSession({ sub: user.id, email: user.email, name: user.name });
 
   const redirectTo = formData.get("from");
   redirect(typeof redirectTo === "string" && redirectTo.startsWith("/") ? redirectTo : "/dashboard");

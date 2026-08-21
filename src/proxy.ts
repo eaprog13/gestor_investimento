@@ -1,47 +1,84 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { construirCabecalhosSeguranca } from "@/lib/security/headers";
+import { comSegurancaReforcada } from "@/lib/security/cookies";
 
-const COOKIE_NAME = "gi_session";
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/callback"];
 
-function getSecretKey() {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) return null;
-  return new TextEncoder().encode(secret);
+function ehCaminhoPublico(caminho: string) {
+  return PUBLIC_PATHS.some((p) => caminho === p || caminho.startsWith(`${p}/`));
 }
 
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+/**
+ * 1) Aplica cabeçalhos de segurança (CSP com nonce, HSTS, etc. — ver
+ *    src/lib/security/headers.ts) a todas as respostas.
+ * 2) Renova a sessão Supabase a cada pedido (necessário para manter os
+ *    cookies atualizados em Server Components — ver
+ *    https://supabase.com/docs/guides/auth/server-side/nextjs) e protege
+ *    as rotas privadas.
+ *
+ * Substitui o antigo "middleware.ts": no Next.js 16 essa convenção foi
+ * renomeada para "proxy.ts" (ver
+ * node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md).
+ */
+export async function proxy(pedido: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const cabecalhosSeguranca = construirCabecalhosSeguranca(nonce, process.env.NODE_ENV === "development");
 
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
-    return NextResponse.next();
+  const pedidoComNonce = new Headers(pedido.headers);
+  pedidoComNonce.set("x-nonce", nonce);
+  pedidoComNonce.set("Content-Security-Policy", cabecalhosSeguranca["Content-Security-Policy"]);
+
+  const resposta = NextResponse.next({ request: { headers: pedidoComNonce } });
+  for (const [chave, valor] of Object.entries(cabecalhosSeguranca)) {
+    resposta.headers.set(chave, valor);
   }
 
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  const secretKey = getSecretKey();
-
-  if (token && secretKey) {
-    try {
-      await jwtVerify(token, secretKey);
-      return NextResponse.next();
-    } catch {
-      // sessão inválida/expirada, cai para o redirect abaixo
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(nome: string) {
+          return pedido.cookies.get(nome)?.value;
+        },
+        set(nome: string, valor: string, opcoes: CookieOptions) {
+          resposta.cookies.set({ name: nome, value: valor, ...comSegurancaReforcada(opcoes) });
+        },
+        remove(nome: string, opcoes: CookieOptions) {
+          resposta.cookies.set({ name: nome, value: "", ...comSegurancaReforcada(opcoes) });
+        },
+      },
     }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname: caminho } = pedido.nextUrl;
+
+  if (!user && !ehCaminhoPublico(caminho)) {
+    const urlLogin = new URL("/login", pedido.url);
+    urlLogin.searchParams.set("from", caminho);
+    return NextResponse.redirect(urlLogin);
   }
 
-  const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("from", pathname);
-  return NextResponse.redirect(loginUrl);
+  if (user && caminho === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", pedido.url));
+  }
+
+  return resposta;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Corre em tudo exceto:
-     * - _next/static, _next/image (assets do Next.js)
-     * - favicon.ico e outros ficheiros estáticos em /public
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    {
+      source: "/((?!_next/static|_next/image|favicon.ico).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
   ],
 };

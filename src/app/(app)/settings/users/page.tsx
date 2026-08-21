@@ -1,6 +1,6 @@
 import { getUsers } from "@/lib/data";
-import { formatDate } from "@/lib/format";
 import { UserForm } from "@/components/UserForm";
+import { EditUserForm } from "@/components/EditUserForm";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +24,7 @@ export default async function UsersPage() {
         <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Utilizadores existentes</h2>
         <ul className="flex flex-col divide-y divide-[var(--border)] text-sm">
           {users.map((user) => (
-            <li key={user.id} className="flex items-center justify-between py-2.5">
-              <div>
-                <p className="font-medium text-[var(--text-primary)]">{user.name}</p>
-                <p className="text-[var(--text-muted)]">{user.email}</p>
-              </div>
-              <span className="text-[var(--text-muted)]">desde {formatDate(user.createdAt)}</span>
-            </li>
+            <EditUserForm key={user.id} user={user} />
           ))}
         </ul>
       </section>

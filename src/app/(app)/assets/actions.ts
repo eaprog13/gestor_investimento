@@ -2,17 +2,26 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth/session";
+import { obterContentor } from "@/composition/container";
+import { requireSession } from "@/lib/auth/session";
 import { assetSchema, transactionSchema, valuationSchema } from "@/lib/validation";
+import {
+  criarAtivo,
+  atualizarAtivo,
+  arquivarAtivo,
+  removerAtivo,
+} from "@/core/services/assetService";
+import {
+  criarTransacao,
+  atualizarTransacao,
+  removerTransacao,
+} from "@/core/services/transactionService";
+import {
+  criarOuAtualizarValorizacao,
+  removerValorizacao,
+} from "@/core/services/valuationService";
 
 export type ActionState = { status: "idle" | "error" | "success"; message?: string };
-
-async function requireSession() {
-  const session = await getSession();
-  if (!session) throw new Error("Não autenticado.");
-  return session;
-}
 
 export async function createAsset(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   await requireSession();
@@ -26,7 +35,7 @@ export async function createAsset(_prevState: ActionState, formData: FormData): 
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const asset = await prisma.asset.create({ data: parsed.data });
+  const asset = await criarAtivo(obterContentor(), parsed.data);
   revalidatePath("/assets");
   revalidatePath("/dashboard");
   redirect(`/assets/${asset.id}`);
@@ -48,7 +57,7 @@ export async function updateAsset(
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  await prisma.asset.update({ where: { id }, data: parsed.data });
+  await atualizarAtivo(obterContentor(), id, parsed.data);
   revalidatePath("/assets");
   revalidatePath(`/assets/${id}`);
   revalidatePath("/dashboard");
@@ -57,7 +66,7 @@ export async function updateAsset(
 
 export async function toggleArchiveAsset(id: string, currentlyArchived: boolean) {
   await requireSession();
-  await prisma.asset.update({ where: { id }, data: { isArchived: !currentlyArchived } });
+  await arquivarAtivo(obterContentor(), id, currentlyArchived);
   revalidatePath("/assets");
   revalidatePath(`/assets/${id}`);
   revalidatePath("/dashboard");
@@ -65,7 +74,7 @@ export async function toggleArchiveAsset(id: string, currentlyArchived: boolean)
 
 export async function deleteAsset(id: string) {
   await requireSession();
-  await prisma.asset.delete({ where: { id } });
+  await removerAtivo(obterContentor(), id);
   revalidatePath("/assets");
   revalidatePath("/dashboard");
   redirect("/assets");
@@ -89,8 +98,8 @@ export async function createTransaction(
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const { assetId, ...data } = parsed.data;
-  await prisma.transaction.create({ data: { ...data, date: new Date(data.date), assetId } });
+  const { assetId, date, ...data } = parsed.data;
+  await criarTransacao(obterContentor(), { ...data, assetId, date: new Date(date) });
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/assets");
   revalidatePath("/transactions");
@@ -117,11 +126,8 @@ export async function updateTransaction(
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const { assetId, ...data } = parsed.data;
-  await prisma.transaction.update({
-    where: { id },
-    data: { ...data, date: new Date(data.date), assetId },
-  });
+  const { assetId, date, ...data } = parsed.data;
+  await atualizarTransacao(obterContentor(), id, { ...data, assetId, date: new Date(date) });
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/assets");
   revalidatePath("/transactions");
@@ -131,7 +137,7 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string, assetId: string) {
   await requireSession();
-  await prisma.transaction.delete({ where: { id } });
+  await removerTransacao(obterContentor(), id);
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/assets");
   revalidatePath("/transactions");
@@ -154,12 +160,7 @@ export async function createValuation(
   }
 
   const { assetId, date, ...data } = parsed.data;
-  // Uma marcação por ativo/dia: reintroduzir "hoje" atualiza em vez de duplicar.
-  await prisma.valuationSnapshot.upsert({
-    where: { assetId_date: { assetId, date: new Date(date) } },
-    update: { value: data.value, notes: data.notes },
-    create: { assetId, date: new Date(date), value: data.value, notes: data.notes },
-  });
+  await criarOuAtualizarValorizacao(obterContentor(), { ...data, assetId, date: new Date(date) });
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/assets");
   revalidatePath("/dashboard");
@@ -168,9 +169,8 @@ export async function createValuation(
 
 export async function deleteValuation(id: string, assetId: string) {
   await requireSession();
-  await prisma.valuationSnapshot.delete({ where: { id } });
+  await removerValorizacao(obterContentor(), id);
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/assets");
   revalidatePath("/dashboard");
 }
-

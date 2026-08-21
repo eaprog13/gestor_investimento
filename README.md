@@ -1,36 +1,162 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gestor de Investimento
 
-## Getting Started
+Livro-razão e dashboard do portefólio familiar: registo de transações
+(compras, vendas, depósitos, dividendos, juros, comissões...) por ativo,
+marcações periódicas de valor de mercado, e um dashboard com KPIs, alocação
+por categoria e desempenho ao longo do tempo.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **[Next.js 16](https://nextjs.org)** (App Router, TypeScript, Server Actions) — front-end e back-end na mesma app.
+- **[Tailwind CSS 4](https://tailwindcss.com)** + **[Recharts](https://recharts.org)** — UI e gráficos.
+- **[Supabase](https://supabase.com)** — Postgres gerido + Auth, acedidos via `@supabase/supabase-js` / `@supabase/ssr` (sem ORM — ver "Base de dados e autenticação" abaixo).
+- **[zod](https://zod.dev)** — validação dos formulários.
+- **[Vitest](https://vitest.dev)** — testes da lógica de negócio.
+
+App fechada, sem registo público: os membros da família são adicionados por
+quem já tem acesso (`/settings/users`), via Admin API do Supabase Auth.
+
+## Arquitetura
+
+Hexagonal (ports & adapters): o núcleo do negócio nunca depende do Supabase
+diretamente, só de interfaces — trocar de base de dados/fornecedor de
+autenticação no futuro significa escrever novos adapters, sem tocar em
+services nem em rotas.
+
+```
+src/core/types.ts               tipos de domínio (Asset, Transaction, ValuationSnapshot, Profile)
+src/core/ports/                  interfaces (contratos) de dados e identidade
+src/core/services/               regras de negócio — testadas com fakes em memória
+src/adapters/supabase/           implementação dos ports sobre o Supabase
+src/composition/container.ts     raiz de composição — único sítio que escolhe "Supabase"
+src/lib/supabase/admin.ts        cliente Supabase (chave service_role) — todo o acesso a dados
+src/lib/supabase/server.ts       cliente Supabase (chave anon, sessão do pedido) — só autenticação
+src/lib/supabase/client.ts       cliente Supabase de browser — disponível, não usado no login atual
+src/lib/auth/session.ts          getSession()/requireSession() a partir da sessão Supabase Auth
+src/lib/security/headers.ts      cabeçalhos de segurança (CSP, HSTS, ...) — ver "Segurança"
+src/lib/security/rateLimit.ts    limite de tentativas de login
+src/proxy.ts                     renova a sessão, protege rotas e aplica os cabeçalhos de segurança
+src/lib/calculations.ts          cálculo puro do livro-razão (cost basis, YTD, alocação...) — testado sem BD
+src/lib/data.ts                  leituras já compostas para as páginas
+src/app/(app)/                   páginas autenticadas (dashboard, assets, transactions, settings/users)
+src/app/login/                   página e Server Action de login
+supabase/                        schema.sql, policies.sql, seed.ts, relatorio_saude_bd.sql
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Nota sobre `src/proxy.ts`:** no Next.js 16 a convenção `middleware.ts` foi
+renomeada para `proxy.ts` (mesmo comportamento, só o nome do ficheiro/export
+mudou — ver `node_modules/next/dist/docs/.../file-conventions/proxy.md`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Base de dados e autenticação (Supabase)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Sem ORM/migrations — schema em SQL puro, aplicado manualmente no SQL Editor
+do Supabase:
 
-## Learn More
+1. Cria um projeto em [supabase.com](https://supabase.com) (grátis).
+2. **SQL Editor** → corre, por esta ordem:
+   - `supabase/schema.sql` — tabelas (`profiles`, `assets`, `transactions`,
+     `valuation_snapshots`), índices, RLS, trigger que cria o perfil ao
+     criar um utilizador.
+   - `supabase/policies.sql` — RLS: livro-razão partilhado por toda a
+     família (qualquer autenticado lê/escreve tudo — ver comentário no
+     topo do ficheiro sobre porque não é scoped por utilizador).
+3. **Project Settings → API** → copia `URL`, `anon public key` e
+   `service_role key` para `.env` (ver `.env.example`).
+4. Cria o primeiro utilizador:
+   ```bash
+   npm run seed   # lê INITIAL_USER_EMAIL/PASSWORD/NAME do .env
+   ```
+   (ou pela dashboard: **Authentication → Users → Add user**, com
+   `user_metadata.name` definido — o trigger cria o perfil automaticamente).
 
-To learn more about Next.js, take a look at the following resources:
+**Porquê sem ORM:** o schema real do Postgres (constraints, índices, RLS,
+triggers) fica como fonte da verdade, sem uma camada de tradução/migrations
+no meio. O acesso é feito através de repositórios em
+`src/adapters/supabase/`, que isolam o resto da app do SQL.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Autenticação:** Supabase Auth (`@supabase/ssr`) substitui a autenticação
+própria que a app tinha antes (password hash + JWT em cookie próprio) —
+menos código para manter em segurança, e sessão/renovação/expiração ficam a
+cargo do Supabase. `public.profiles` guarda só o que é específico da app
+(nome), nunca a password.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Validar/otimizar depois de estar em produção:** `supabase/relatorio_saude_bd.sql`
+tem queries prontas (queries lentas, índices em falta, tabelas sem RLS,
+bloat/autovacuum) — corre no SQL Editor ou como Custom Report no dashboard
+do Supabase. Vale a pena correr também o **Security Advisor** e o
+**Performance Advisor** do dashboard (Database → Advisors) depois do
+primeiro deploy.
 
-## Deploy on Vercel
+## Segurança
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Cabeçalhos HTTP** (`src/lib/security/headers.ts`, aplicados em
+  `src/proxy.ts`): Content-Security-Policy com nonce por pedido,
+  Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options,
+  Referrer-Policy, Permissions-Policy — o equivalente ao "helmet" do
+  Express, adaptado ao runtime serverless/edge do Next.js.
+- **CSRF em Server Actions:** o Next.js já compara a origem de cada pedido
+  a uma Server Action com o domínio do host, e rejeita se não coincidir —
+  não há rotas de API expostas nesta app (só Server Actions), por isso não
+  há "CORS" a configurar; o comportamento por omissão (só o próprio
+  domínio) já é o que se quer.
+- **Rate limiting do login** (`src/lib/security/rateLimit.ts`): 10
+  tentativas/minuto por email+IP, via Upstash Redis. Sem
+  `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` definidos (ex.: dev
+  local) fica inativo — configura-os em produção (ver `.env.example`).
+- **Sessão:** cookies HTTP-only geridos pelo Supabase Auth — o JWT nunca
+  fica acessível a JavaScript no browser.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## A correr localmente
+
+```bash
+cp .env.example .env   # preenche com as credenciais do teu projeto Supabase
+npm install
+npm run seed            # cria o utilizador inicial (e dados de demo, se SEED_DEMO_DATA=true)
+npm run dev
+```
+
+Abre [http://localhost:3000](http://localhost:3000).
+
+## Testes
+
+```bash
+npm test
+```
+
+Cobrem a lógica de negócio pura, sem precisar de ligação à base de dados:
+
+- `src/lib/calculations.test.ts` — cost basis, rendimento, YTD, alocação,
+  série temporal e ranking de desempenho, incluindo um caso que apanhou um
+  bug real: o ganho YTD em euros de um ativo comprado antes do ano corrente
+  mas sem valorização registada antes de 1 de janeiro estava a contar o
+  capital investido em anos anteriores como se fosse ganho deste ano
+  (corrigido — ver comentário em `computeYtd`).
+- `src/lib/validation.test.ts` — regras dos formulários (zod).
+- `src/core/services/userService.test.ts` — email duplicado não chega a
+  chamar a Admin API do Supabase, usando um fake do port `RepositorioPerfil`.
+
+## Deploy
+
+Pensada para viver num subdomínio próprio (ex: `investimento.oteudominio.com`):
+
+- **Vercel (recomendado).** Liga o repositório, adiciona o subdomínio ao
+  projeto (Settings → Domains) e aponta um CNAME no DNS do teu domínio —
+  o Vercel emite o certificado TLS automaticamente. Define as variáveis de
+  ambiente do Supabase (ver `.env.example`) no projeto; o deploy é
+  automático a cada push.
+- **Subdomínio próprio (VPS / servidor de casa).** `npm run build` + `npm run start`
+  (porta configurável via `PORT`) atrás de um reverse proxy (ex: Caddy ou
+  nginx) com HTTPS.
+
+**Nota:** projetos Supabase no plano free pausam automaticamente ao fim de
+~7 dias sem pedidos. Para uma app de consulta esporádica (ex: ver o
+portefólio uma vez por mês), considera um Vercel Cron Job semanal que faça
+um pedido leve à app só para a manter acordada.
+
+## Notas
+
+- O livro-razão (`transactions`) é append-only por natureza: editar só para
+  corrigir erros de introdução, nunca para "ajustar" ao valor de mercado —
+  isso é o papel de `valuation_snapshots`.
+- Uma marcação de valor por ativo/dia: reintroduzir "hoje" atualiza em vez
+  de duplicar (`unique(asset_id, date)`).

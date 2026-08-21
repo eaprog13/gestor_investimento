@@ -21,6 +21,20 @@ export const userSchema = z.object({
   password: z.string().min(8, "A password tem de ter pelo menos 8 caracteres."),
 });
 
+export const updateUserSchema = z.object({
+  name: userSchema.shape.name,
+});
+
+export const newPasswordSchema = z
+  .object({
+    password: z.string().min(8, "A password tem de ter pelo menos 8 caracteres."),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    error: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
+
 export const assetSchema = z.object({
   name: z.string().trim().min(1, "Indica um nome.").max(120),
   category: z.string().trim().min(1, "Indica uma categoria.").max(60),

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
 import { login, type ActionState } from "@/app/login/actions";
 
 const initialState: ActionState = { status: "idle" };
@@ -53,6 +54,13 @@ export function LoginForm({ from }: { from?: string }) {
           className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
         />
       </div>
+
+      <Link
+        href="/forgot-password"
+        className="self-end text-xs font-medium text-[var(--text-secondary)] hover:underline"
+      >
+        Esqueceste-te da password?
+      </Link>
 
       {state.status === "error" ? (
         <p role="alert" className="text-sm font-medium text-[var(--delta-bad)]">

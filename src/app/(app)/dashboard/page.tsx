@@ -8,9 +8,23 @@ import { RecentTransactionsList } from "@/components/RecentTransactionsList";
 
 export const dynamic = "force-dynamic";
 
-function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Card({
+  title,
+  action,
+  children,
+  atraso = 0,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  /** Atraso (ms) da animação de entrada — para as secções aparecerem em cascata, não todas de repente. */
+  atraso?: number;
+}) {
   return (
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+    <section
+      className="animate-entrada rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors duration-200 hover:border-[var(--series-1)]/30 sm:p-5"
+      style={{ animationDelay: `${atraso}ms` }}
+    >
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
         {action}
@@ -58,13 +72,14 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Valor total" value={kpis.totalValue} />
-        <KpiCard label="Total investido" value={kpis.totalInvested} />
+        <KpiCard label="Valor total" value={kpis.totalValue} atraso={0} />
+        <KpiCard label="Total investido" value={kpis.totalInvested} atraso={60} />
         <KpiCard
           label="Ganho desde o início"
           value={kpis.sinceInceptionGain}
           deltaAmount={kpis.sinceInceptionGain}
           deltaPercent={kpis.sinceInceptionGainPercent}
+          atraso={120}
         />
         <KpiCard
           label={`Ganho YTD (${new Date().getFullYear()})`}
@@ -72,27 +87,28 @@ export default async function DashboardPage() {
           deltaAmount={kpis.ytdGainAmount}
           deltaPercent={kpis.ytdGainPercent}
           deltaLabel={kpis.ytdIncome > 0 ? `inclui rendimento` : undefined}
+          atraso={180}
         />
       </div>
 
-      <Card title="Valor do portefólio ao longo do tempo">
+      <Card title="Valor do portefólio ao longo do tempo" atraso={240}>
         <PortfolioValueChart data={data.timeSeries} />
       </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title="Desempenho por ativo">
+          <Card title="Desempenho por ativo" atraso={280}>
             <AssetPerformanceTable rows={data.performance} />
           </Card>
         </div>
-        <Card title="Alocação por categoria">
+        <Card title="Alocação por categoria" atraso={320}>
           <AllocationDonutChart data={data.allocation} />
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <Card title="Últimos movimentos" action={
+          <Card title="Últimos movimentos" atraso={360} action={
             <Link href="/transactions" className="text-sm text-[var(--series-1)] hover:underline">
               Ver tudo
             </Link>
@@ -100,7 +116,7 @@ export default async function DashboardPage() {
             <RecentTransactionsList transactions={data.recentTransactions} />
           </Card>
         </div>
-        <Card title="Melhores / piores desempenhos">
+        <Card title="Melhores / piores desempenhos" atraso={400}>
           <div className="flex flex-col gap-4">
             <div>
               <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">

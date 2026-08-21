@@ -1,7 +1,7 @@
 import "server-only";
 
-import { prisma } from "@/lib/prisma";
-import type { TransactionType } from "@/generated/prisma/client";
+import { obterContentor } from "@/composition/container";
+import type { TransactionType } from "@/core/types";
 import {
   computeAssetFinancials,
   computeAssetPerformance,
@@ -32,11 +32,7 @@ function toLedger(asset: {
 }
 
 export async function getAssets(options: { includeArchived?: boolean } = {}) {
-  const assets = await prisma.asset.findMany({
-    where: options.includeArchived ? undefined : { isArchived: false },
-    include: { transactions: true, valuations: true },
-    orderBy: { name: "asc" },
-  });
+  const assets = await obterContentor().ativos.listar({ incluirArquivados: options.includeArchived });
 
   return assets.map((asset) => ({
     ...asset,
@@ -46,13 +42,7 @@ export async function getAssets(options: { includeArchived?: boolean } = {}) {
 }
 
 export async function getAsset(id: string) {
-  const asset = await prisma.asset.findUnique({
-    where: { id },
-    include: {
-      transactions: { orderBy: { date: "desc" } },
-      valuations: { orderBy: { date: "desc" } },
-    },
-  });
+  const asset = await obterContentor().ativos.obterPorId(id);
   if (!asset) return null;
 
   return {
@@ -62,11 +52,7 @@ export async function getAsset(id: string) {
 }
 
 export async function getAssetOptions() {
-  return prisma.asset.findMany({
-    where: { isArchived: false },
-    select: { id: true, name: true, category: true, currency: true },
-    orderBy: { name: "asc" },
-  });
+  return obterContentor().ativos.listarOpcoes();
 }
 
 export type TransactionFilters = {
@@ -78,41 +64,20 @@ export type TransactionFilters = {
 };
 
 export async function getTransactions(filters: TransactionFilters = {}) {
-  return prisma.transaction.findMany({
-    where: {
-      assetId: filters.assetId || undefined,
-      type: filters.type || undefined,
-      date: {
-        gte: filters.from ? new Date(filters.from) : undefined,
-        lte: filters.to ? new Date(filters.to) : undefined,
-      },
-      notes: filters.q ? { contains: filters.q, mode: "insensitive" } : undefined,
-    },
-    include: { asset: { select: { id: true, name: true, category: true, currency: true } } },
-    orderBy: { date: "desc" },
-  });
+  return obterContentor().transacoes.listar(filters);
 }
 
 export async function getTransaction(id: string) {
-  return prisma.transaction.findUnique({
-    where: { id },
-    include: { asset: { select: { id: true, name: true, currency: true } } },
-  });
+  return obterContentor().transacoes.obterPorId(id);
 }
 
 export async function getRecentTransactions(limit = 8) {
-  return prisma.transaction.findMany({
-    include: { asset: { select: { id: true, name: true, currency: true } } },
-    orderBy: { date: "desc" },
-    take: limit,
-  });
+  return obterContentor().transacoes.recentes(limit);
 }
 
 export async function getDashboardData() {
-  const assets = await prisma.asset.findMany({
-    where: { isArchived: false },
-    include: { transactions: true, valuations: true },
-  });
+  const dependencias = obterContentor();
+  const assets = await dependencias.ativos.listar({ incluirArquivados: false });
 
   const ledgers = assets.map(toLedger);
   const asOf = new Date();
@@ -156,8 +121,5 @@ export async function getDashboardData() {
 }
 
 export async function getUsers() {
-  return prisma.user.findMany({
-    select: { id: true, name: true, email: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-  });
+  return obterContentor().perfis.listar();
 }

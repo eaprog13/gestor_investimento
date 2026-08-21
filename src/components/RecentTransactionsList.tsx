@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { TransactionType } from "@/generated/prisma/client";
+import type { TransactionType } from "@/core/types";
 import { formatCurrency, formatDate, formatTransactionType } from "@/lib/format";
 
 type Row = {

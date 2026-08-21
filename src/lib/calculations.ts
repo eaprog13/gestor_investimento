@@ -6,7 +6,7 @@
 // independentes do valor de mercado. Não há totais derivados guardados na
 // base de dados — está tudo calculado aqui, num único sítio testável.
 
-import type { TransactionType } from "@/generated/prisma/client";
+import type { TransactionType } from "@/core/types";
 
 export type TxLite = {
   type: TransactionType;
@@ -145,8 +145,18 @@ export type YtdResult = {
  * Ganho YTD do portefólio (soma de todos os ativos):
  *   Ganho € = (V_end − V_start − netFlowYTD) + incomeYTD
  *   Ganho % = Ganho € ÷ V_start
- * (fallback ao cost-basis-no-início-do-ano quando V_start é 0, ex. ativo
- * novo este ano — sem isso a % ficaria sempre indefinida).
+ *
+ * V_start de cada ativo, individualmente, é o último snapshot antes do
+ * início do ano — ou, na ausência de um (ex.: ativo novo este ano, ou só
+ * começou a ser valorizado depois), o cost basis nessa mesma data como
+ * aproximação. O fallback é calculado por ativo, não a nível do portefólio:
+ * somar primeiro e só depois decidir "portefólio inteiro sem snapshot vs.
+ * com" esconderia o caso comum de uma carteira mista (alguns ativos com
+ * snapshot de fecho de ano, outros sem) — sem isto, o capital investido
+ * antes do ano nos ativos "sem" ficaria de fora tanto de V_start como do
+ * netFlowYTD (que só conta fluxos DENTRO do ano), inflacionando
+ * artificialmente o ganho em euros exibido (ver src/lib/calculations.test.ts,
+ * "gainAmount inclui o cost basis pré-ano quando falta snapshot de arranque").
  *
  * É uma aproximação money-weighted simples (não XIRR/TWR), deliberadamente
  * simples dado o requisito de "stack o mais simples possível".
@@ -160,23 +170,18 @@ export function computeYtd(assets: AssetLedger[], asOf: Date = new Date()): YtdR
   let endValue = 0;
   let netFlow = 0;
   let income = 0;
-  let startCostBasisFallback = 0;
 
   for (const asset of assets) {
     const vStart = latestValue(asset.snapshots, dayBeforeYearStart);
     const vEnd = latestValue(asset.snapshots, asOf);
-    startValue += vStart ?? 0;
+    startValue += vStart ?? netInvested(asset.transactions, dayBeforeYearStart);
     endValue += vEnd ?? 0;
     netFlow += netFlowBetween(asset.transactions, yearStart, asOf);
     income += incomeBetween(asset.transactions, yearStart, asOf);
-    if (vStart === null) {
-      startCostBasisFallback += netInvested(asset.transactions, dayBeforeYearStart);
-    }
   }
 
   const gainAmount = endValue - startValue - netFlow + income;
-  const effectiveStart = startValue > 0 ? startValue : startCostBasisFallback;
-  const gainPercent = effectiveStart > 0 ? gainAmount / effectiveStart : null;
+  const gainPercent = startValue > 0 ? gainAmount / startValue : null;
 
   return { year, startValue, endValue, netFlow, income, gainAmount, gainPercent };
 }

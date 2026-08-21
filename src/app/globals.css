@@ -97,3 +97,54 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* ── Animações ──────────────────────────────────────────────────────────
+ * Só opacity/transform (aceleradas por GPU, nunca disparam reflow/repaint
+ * caro) e "one-shot" — nada em loop contínuo a consumir ciclos em segundo
+ * plano. Aplicadas via classe (.animate-entrada, com animationDelay inline
+ * para o efeito staggered), nunca a elementos que mudam de posição/tamanho
+ * depois de montados (ex: o header fixo — só ao conteúdo de cada página).
+ */
+@keyframes entrada {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-entrada {
+  animation: entrada 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Barra horizontal a "crescer" da esquerda — para usos futuros em gráficos
+ * de barras próprios (os do Recharts já têm animação nativa). Mesma
+ * política: transform (scaleX), one-shot, GPU. */
+@keyframes crescer-barra {
+  from {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  to {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+@utility barra-cresce {
+  animation: crescer-barra 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Quem pede menos movimento ao sistema operativo, não recebe animações. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-entrada,
+  .barra-cresce {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
