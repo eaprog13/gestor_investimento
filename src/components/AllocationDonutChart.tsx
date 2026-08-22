@@ -36,46 +36,51 @@ export function AllocationDonutChart({ data }: { data: AllocationSlice[] }) {
   const colors = assignCategoryColors(data.map((d) => d.category));
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <div className="h-56 w-full sm:w-56 sm:shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="category"
-              innerRadius="62%"
-              outerRadius="90%"
-              paddingAngle={2}
-              stroke="var(--surface)"
-              strokeWidth={2}
-            >
-              {data.map((slice) => (
-                <Cell key={slice.category} fill={colors.get(slice.category)} />
-              ))}
-            </Pie>
-            <Tooltip content={<AllocationTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+    // @container: o layout reage à largura real do card, não à do ecrã — este card
+    // vive numa grelha de 3 colunas e fica estreito mesmo em ecrãs largos, onde
+    // `sm:flex-row` forçava o donut fixo (224px) a transbordar do card.
+    <div className="@container">
+      <div className="flex flex-col gap-4 @sm:flex-row @sm:items-center">
+        <div className="mx-auto h-48 w-48 shrink-0 @sm:mx-0 @sm:h-40 @sm:w-40">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="category"
+                innerRadius="62%"
+                outerRadius="90%"
+                paddingAngle={2}
+                stroke="var(--surface)"
+                strokeWidth={2}
+              >
+                {data.map((slice) => (
+                  <Cell key={slice.category} fill={colors.get(slice.category)} />
+                ))}
+              </Pie>
+              <Tooltip content={<AllocationTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="flex min-w-0 flex-1 flex-col gap-2">
+          {data.map((slice) => (
+            <li key={slice.category} className="flex min-w-0 items-center justify-between gap-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2 text-[var(--text-primary)]">
+                <span
+                  className="inline-block size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: colors.get(slice.category) }}
+                  aria-hidden
+                />
+                <span className="truncate">{slice.category}</span>
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-[var(--text-secondary)]">
+                {formatCurrency(slice.value)}
+                <span className="ml-1.5 text-[var(--text-muted)]">{formatPercent(slice.pct)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="flex flex-1 flex-col gap-2">
-        {data.map((slice) => (
-          <li key={slice.category} className="flex items-center justify-between gap-3 text-sm">
-            <span className="flex items-center gap-2 text-[var(--text-primary)]">
-              <span
-                className="inline-block size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: colors.get(slice.category) }}
-                aria-hidden
-              />
-              {slice.category}
-            </span>
-            <span className="text-[var(--text-secondary)]">
-              {formatCurrency(slice.value)}
-              <span className="ml-1.5 text-[var(--text-muted)]">{formatPercent(slice.pct)}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

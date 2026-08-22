@@ -74,7 +74,15 @@ export async function proxy(pedido: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!_next/static|_next/image|favicon.ico).*)",
+      // Exclui também ficheiros estáticos por extensão (public/, ícones de
+      // metadata do App Router, fontes, etc.) — sem isto, um pedido não
+      // autenticado a um ficheiro estático era redirecionado para /login
+      // (HTML em vez do ficheiro), partindo qualquer imagem usada antes de
+      // autenticar (bug real encontrado e confirmado no helpdesk_smartcreative,
+      // que partilha este mesmo padrão de proxy — só se manifesta em
+      // produção, nunca em `next dev`/Turbopack).
+      source:
+        "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|txt|xml|woff2?|ttf)$).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

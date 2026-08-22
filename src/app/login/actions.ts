@@ -42,6 +42,11 @@ export async function login(_prevState: ActionState, formData: FormData): Promis
     return { status: "error", message: "Credenciais inválidas." };
   }
 
+  // "//evil.com" também começa por "/" mas os browsers tratam-no como URL
+  // absoluto (protocol-relative) — sem este segundo teste, um link
+  // "/login?from=//evil.com" seria um open redirect após o login.
   const redirectTo = formData.get("from");
-  redirect(typeof redirectTo === "string" && redirectTo.startsWith("/") ? redirectTo : "/dashboard");
+  const destinoSeguro =
+    typeof redirectTo === "string" && redirectTo.startsWith("/") && !redirectTo.startsWith("//");
+  redirect(destinoSeguro ? redirectTo : "/dashboard");
 }
