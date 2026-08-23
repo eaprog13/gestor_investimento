@@ -12,6 +12,8 @@ export type TxLite = {
   type: TransactionType;
   date: Date;
   amount: number;
+  /** Opcional: omitido nos testes/chamadas que não mexem em netQuantity — tratado como null. */
+  quantity?: number | null;
 };
 
 export type SnapshotLite = {
@@ -49,6 +51,22 @@ export function netInvested(transactions: TxLite[], asOf: Date = new Date()): nu
   );
 }
 
+/**
+ * Unidades detidas (BUY soma, SELL subtrai), até (inclusive) `asOf`.
+ * Transações sem quantidade (depósitos, comissões, dividendos... — ver
+ * NewTransaction, quantity é null para ativos "sem unidades") são ignoradas.
+ * Usado só para cruzar com a cotação ao vivo (ver src/lib/data.ts,
+ * obterPrecoAoVivo) — sem cotação configurada, nunca é chamada.
+ */
+export function netQuantity(transactions: TxLite[], asOf: Date = new Date()): number {
+  return upTo(transactions, asOf).reduce((sum, tx) => {
+    if (tx.quantity == null) return sum;
+    if (tx.type === "BUY") return sum + tx.quantity;
+    if (tx.type === "SELL") return sum - tx.quantity;
+    return sum;
+  }, 0);
+}
+
 /** Soma de DIVIDEND + INTEREST, até (inclusive) `asOf`. */
 export function incomeReceived(transactions: TxLite[], asOf: Date = new Date()): number {
   return upTo(transactions, asOf).reduce(
@@ -82,6 +100,8 @@ export function latestValue(snapshots: SnapshotLite[], asOf: Date = new Date()):
 export type AssetFinancials = {
   netInvested: number;
   currentValue: number | null;
+  /** De onde veio `currentValue`: cotação ao vivo (API), última valorização manual, ou null (nenhuma das duas). */
+  currentValueSource: "live" | "manual" | null;
   unrealizedPL: number | null;
   unrealizedPLPercent: number | null;
   incomeReceived: number;
@@ -91,17 +111,24 @@ export type AssetFinancials = {
 
 /**
  * Métricas "desde sempre" de um ativo, a uma data de referência (por
- * omissão, hoje). `currentValue` é null enquanto não existir nenhum
- * snapshot — nesse caso P/L e retorno total também ficam null (não se pode
- * concluir nada sobre desempenho sem uma valorização).
+ * omissão, hoje). `currentValue` vem, por ordem de preferência, da cotação
+ * ao vivo (`liveValue`, preço de mercado × unidades detidas — ver
+ * src/lib/data.ts) ou, na sua ausência, da última valorização manual
+ * (snapshot). Fica null se não houver nenhuma das duas — nesse caso P/L e
+ * retorno total também ficam null (não se pode concluir nada sobre
+ * desempenho sem um valor atual).
  */
 export function computeAssetFinancials(
   transactions: TxLite[],
   snapshots: SnapshotLite[],
-  asOf: Date = new Date()
+  asOf: Date = new Date(),
+  liveValue: number | null = null
 ): AssetFinancials {
   const invested = netInvested(transactions, asOf);
-  const currentValue = latestValue(snapshots, asOf);
+  const manualValue = latestValue(snapshots, asOf);
+  const currentValue = liveValue ?? manualValue;
+  const currentValueSource: AssetFinancials["currentValueSource"] =
+    liveValue !== null ? "live" : manualValue !== null ? "manual" : null;
   const income = incomeReceived(transactions, asOf);
 
   const unrealizedPL = currentValue === null ? null : currentValue - invested;
@@ -114,6 +141,7 @@ export function computeAssetFinancials(
   return {
     netInvested: invested,
     currentValue,
+    currentValueSource,
     unrealizedPL,
     unrealizedPLPercent,
     incomeReceived: income,
@@ -129,6 +157,8 @@ export type AssetLedger = {
   currency: string;
   transactions: TxLite[];
   snapshots: SnapshotLite[];
+  /** Preço unitário ao vivo (ver src/lib/data.ts, obterPrecoAoVivo) — omitido/null quando o ativo não tem cotação configurada ou a API falhou. */
+  livePrice?: number | null;
 };
 
 export type YtdResult = {
@@ -289,13 +319,17 @@ export function computeAssetPerformance(
   asOf: Date = new Date()
 ): AssetPerformanceRow[] {
   return assets
-    .map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      category: asset.category,
-      currency: asset.currency,
-      ...computeAssetFinancials(asset.transactions, asset.snapshots, asOf),
-    }))
+    .map((asset) => {
+      const liveValue =
+        asset.livePrice != null ? asset.livePrice * netQuantity(asset.transactions, asOf) : null;
+      return {
+        id: asset.id,
+        name: asset.name,
+        category: asset.category,
+        currency: asset.currency,
+        ...computeAssetFinancials(asset.transactions, asset.snapshots, asOf, liveValue),
+      };
+    })
     .sort((a, b) => {
       if (a.unrealizedPLPercent === null) return 1;
       if (b.unrealizedPLPercent === null) return -1;

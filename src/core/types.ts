@@ -8,6 +8,9 @@ export type Profile = {
   createdAt: Date;
 };
 
+/** "coingecko" (cripto) ou "alphavantage" (ETF/ações) — ver src/lib/quotes.ts. */
+export type PriceProvider = "coingecko" | "alphavantage";
+
 export type Asset = {
   id: string;
   name: string;
@@ -15,6 +18,10 @@ export type Asset = {
   currency: string;
   notes: string | null;
   isArchived: boolean;
+  /** Cotação automática diária — null para ativos sem mercado (Certificados de Aforro, depósitos, imóveis...), que ficam por valorização manual. */
+  priceProvider: PriceProvider | null;
+  /** Símbolo no fornecedor: id da CoinGecko (ex. "bitcoin") ou ticker da Alpha Vantage (ex. "VWCE.DEX", "AAPL"). */
+  priceSymbol: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

@@ -6,6 +6,7 @@
 
 import type {
   Asset,
+  PriceProvider,
   Profile,
   Transaction,
   TransactionType,
@@ -18,7 +19,14 @@ export type AssetWithLedger = Asset & {
   valuations: ValuationSnapshot[];
 };
 
-export type NewAsset = { name: string; category: string; currency: string; notes?: string };
+export type NewAsset = {
+  name: string;
+  category: string;
+  currency: string;
+  notes?: string;
+  priceProvider?: PriceProvider | null;
+  priceSymbol?: string | null;
+};
 
 export interface RepositorioAtivo {
   listar(opcoes?: { incluirArquivados?: boolean }): Promise<AssetWithLedger[]>;
@@ -28,6 +36,17 @@ export interface RepositorioAtivo {
   atualizar(id: string, dados: NewAsset): Promise<Asset>;
   arquivar(id: string, arquivado: boolean): Promise<void>;
   remover(id: string): Promise<void>;
+}
+
+/** Cotação de mercado ao vivo — ver src/lib/quotes.ts. */
+export interface RepositorioCotacoes {
+  /**
+   * Preço unitário atual, na moeda pedida, ou null se não conseguir obter
+   * (símbolo inválido, API em baixo, moeda não suportada pelo fornecedor,
+   * etc.) — nunca lança, quem chama decide o fallback (valorização
+   * manual mais recente).
+   */
+  obterPreco(provider: PriceProvider, symbol: string, currency: string): Promise<number | null>;
 }
 
 export type TransactionFilters = {

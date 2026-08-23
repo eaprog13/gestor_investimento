@@ -24,6 +24,8 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
           category: asset.category,
           currency: asset.currency,
           notes: asset.notes,
+          priceProvider: asset.priceProvider,
+          priceSymbol: asset.priceSymbol,
         }}
       />
 

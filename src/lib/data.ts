@@ -1,7 +1,7 @@
 import "server-only";
 
 import { obterContentor } from "@/composition/container";
-import type { TransactionType } from "@/core/types";
+import type { PriceProvider, TransactionType } from "@/core/types";
 import {
   computeAssetFinancials,
   computeAssetPerformance,
@@ -11,19 +11,24 @@ import {
   computeYtd,
   incomeReceived,
   netInvested,
+  netQuantity,
   type AssetLedger,
   type TimeSeriesPoint,
+  type TxLite,
 } from "@/lib/calculations";
 import { formatTrendContext } from "@/lib/format";
 
-function toLedger(asset: {
-  id: string;
-  name: string;
-  category: string;
-  currency: string;
-  transactions: { type: TransactionType; date: Date; amount: number }[];
-  valuations: { date: Date; value: number }[];
-}): AssetLedger {
+function toLedger(
+  asset: {
+    id: string;
+    name: string;
+    category: string;
+    currency: string;
+    transactions: { type: TransactionType; date: Date; amount: number; quantity: number | null }[];
+    valuations: { date: Date; value: number }[];
+  },
+  livePrice: number | null = null
+): AssetLedger {
   return {
     id: asset.id,
     name: asset.name,
@@ -31,26 +36,61 @@ function toLedger(asset: {
     currency: asset.currency,
     transactions: asset.transactions,
     snapshots: asset.valuations,
+    livePrice,
   };
+}
+
+/**
+ * Cotação ao vivo de um ativo, se tiver fornecedor configurado (ver
+ * src/adapters/quotes/httpQuoteProvider.ts) — null para ativos sem
+ * price_provider/price_symbol (Certificados de Aforro, depósitos,
+ * imóveis... não têm cotação de mercado nenhuma para obter) ou quando a
+ * API falha/está sem chave. Nunca lança.
+ */
+async function obterPrecoAoVivo(asset: {
+  priceProvider: PriceProvider | null;
+  priceSymbol: string | null;
+  currency: string;
+}): Promise<number | null> {
+  if (!asset.priceProvider || !asset.priceSymbol) return null;
+  return obterContentor().cotacoes.obterPreco(asset.priceProvider, asset.priceSymbol, asset.currency);
+}
+
+/** Preço × unidades detidas até `asOf` — null se não houver cotação. */
+function valorAoVivo(price: number | null, transactions: TxLite[], asOf: Date): number | null {
+  if (price === null) return null;
+  return price * netQuantity(transactions, asOf);
 }
 
 export async function getAssets(options: { includeArchived?: boolean } = {}) {
   const assets = await obterContentor().ativos.listar({ incluirArquivados: options.includeArchived });
+  const asOf = new Date();
 
-  return assets.map((asset) => ({
-    ...asset,
-    financials: computeAssetFinancials(asset.transactions, asset.valuations),
-    transactionCount: asset.transactions.length,
-  }));
+  return Promise.all(
+    assets.map(async (asset) => {
+      const livePrice = await obterPrecoAoVivo(asset);
+      const liveValue = valorAoVivo(livePrice, asset.transactions, asOf);
+      return {
+        ...asset,
+        financials: computeAssetFinancials(asset.transactions, asset.valuations, asOf, liveValue),
+        transactionCount: asset.transactions.length,
+      };
+    })
+  );
 }
 
 export async function getAsset(id: string) {
   const asset = await obterContentor().ativos.obterPorId(id);
   if (!asset) return null;
 
+  const asOf = new Date();
+  const livePrice = await obterPrecoAoVivo(asset);
+  const liveValue = valorAoVivo(livePrice, asset.transactions, asOf);
+
   return {
     ...asset,
-    financials: computeAssetFinancials(asset.transactions, asset.valuations),
+    financials: computeAssetFinancials(asset.transactions, asset.valuations, asOf, liveValue),
+    livePrice,
   };
 }
 
@@ -81,9 +121,11 @@ export async function getRecentTransactions(limit = 8) {
 export async function getDashboardData() {
   const dependencias = obterContentor();
   const assets = await dependencias.ativos.listar({ incluirArquivados: false });
-
-  const ledgers = assets.map(toLedger);
   const asOf = new Date();
+
+  const ledgers = await Promise.all(
+    assets.map(async (asset) => toLedger(asset, await obterPrecoAoVivo(asset)))
+  );
 
   const totalInvested = ledgers.reduce((sum, a) => sum + netInvested(a.transactions, asOf), 0);
   const performance = computeAssetPerformance(ledgers, asOf);

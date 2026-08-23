@@ -36,6 +36,7 @@ function contentorFalso(perfisIniciais: Profile[] = []) {
     ativos: {} as Dependencias["ativos"],
     transacoes: {} as Dependencias["transacoes"],
     valorizacoes: {} as Dependencias["valorizacoes"],
+    cotacoes: {} as Dependencias["cotacoes"],
   };
 
   return { dependencias, nomesAtualizadosNaIdentidade };

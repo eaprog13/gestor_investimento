@@ -87,6 +87,40 @@ do Supabase. Vale a pena correr também o **Security Advisor** e o
 **Performance Advisor** do dashboard (Database → Advisors) depois do
 primeiro deploy.
 
+## Cotações ao vivo
+
+Cada ativo pode, opcionalmente, ser ligado a uma cotação de mercado diária
+(editar ativo → "Cotação automática"). Quando configurada, o **Valor atual**
+e a **P/L não realizada** desse ativo (e os totais do dashboard que os
+somam) passam a usar `preço × unidades detidas` em vez da última
+valorização manual — a valorização manual continua a servir de reserva
+sempre que a cotação falhar ou não estiver configurada.
+
+Fornecedores suportados (`src/adapters/quotes/httpQuoteProvider.ts`):
+
+| Fornecedor | Para | Chave? | Símbolo (campo "Cotação automática") |
+|---|---|---|---|
+| CoinGecko | Cripto (Bitcoin, etc.) | Não | id da CoinGecko, ex: `bitcoin` (não o ticker `BTC`) |
+| Alpha Vantage | ETF / ações | Sim, grátis — [pedir aqui](https://www.alphavantage.co/support/#api-key) | ticker da bolsa, ex: `AAPL` |
+
+**Certificados de Aforro (e outros ativos sem mercado — depósitos,
+imóveis...) não têm fornecedor.** O valor de um Certificado de Aforro é
+calculado pelo IGCP por fórmula (média da Euribor a 3 meses + prémio de
+permanência escalonado), não cotado em bolsa nenhuma — continuam,
+deliberadamente, só com valorização manual.
+
+**Nota sobre moeda na Alpha Vantage:** o `GLOBAL_QUOTE` devolve o preço na
+moeda da bolsa onde o símbolo cota, sem indicar qual — escolhe um símbolo já
+cotado na moeda do ativo (ex: a listagem em EUR de um ETF na XETRA, não a
+mesma listagem em USD numa bolsa americana) ou o valor fica errado sem
+conversão nenhuma a avisar.
+
+As cotações ficam em cache 24h (`fetch`/`next.revalidate`) — respeita o
+limite de ~25 pedidos/dia do plano grátis da Alpha Vantage e corresponde ao
+pedido de "valores diários". Sem `ALPHA_VANTAGE_API_KEY` definida, ativos
+ligados à Alpha Vantage ficam silenciosamente sem cotação (fallback para
+valorização manual) — ver `.env.example`.
+
 ## Segurança
 
 - **Cabeçalhos HTTP** (`src/lib/security/headers.ts`, aplicados em

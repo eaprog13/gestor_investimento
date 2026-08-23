@@ -6,6 +6,7 @@ import { RepositorioAtivoSupabase } from "@/adapters/supabase/assetRepository";
 import { RepositorioTransacaoSupabase } from "@/adapters/supabase/transactionRepository";
 import { RepositorioValorizacaoSupabase } from "@/adapters/supabase/valuationRepository";
 import { FornecedorGestaoIdentidadeSupabase } from "@/adapters/supabase/identityAdminProvider";
+import { RepositorioCotacoesHttp } from "@/adapters/quotes/httpQuoteProvider";
 
 /**
  * Raiz de composição: único ficheiro que escolhe qual implementação
@@ -27,6 +28,7 @@ export function obterContentor(): Dependencias {
     ativos: new RepositorioAtivoSupabase(bd),
     transacoes: new RepositorioTransacaoSupabase(bd),
     valorizacoes: new RepositorioValorizacaoSupabase(bd),
+    cotacoes: new RepositorioCotacoesHttp(),
     identidade: new FornecedorGestaoIdentidadeSupabase(bd.auth.admin),
   };
 

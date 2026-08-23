@@ -66,3 +66,12 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
 export function formatTransactionType(type: string) {
   return TRANSACTION_TYPE_LABELS[type] ?? type;
 }
+
+const PRICE_PROVIDER_LABELS: Record<string, string> = {
+  coingecko: "CoinGecko",
+  alphavantage: "Alpha Vantage",
+};
+
+export function formatPriceProvider(provider: string) {
+  return PRICE_PROVIDER_LABELS[provider] ?? provider;
+}

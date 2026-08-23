@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositorioAtivo, NewAsset, AssetWithLedger } from "@/core/ports/repositories";
-import type { Asset } from "@/core/types";
+import type { Asset, PriceProvider } from "@/core/types";
 import { paraTransacao, type LinhaTransacao } from "@/adapters/supabase/transactionRow";
 import { paraValorizacao, type LinhaValorizacao } from "@/adapters/supabase/valuationRow";
 
@@ -12,6 +12,8 @@ type LinhaAtivo = {
   currency: string;
   notes: string | null;
   is_archived: boolean;
+  price_provider: string | null;
+  price_symbol: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,6 +31,8 @@ function paraAtivo(linha: LinhaAtivo): Asset {
     currency: linha.currency,
     notes: linha.notes,
     isArchived: linha.is_archived,
+    priceProvider: (linha.price_provider as PriceProvider | null) ?? null,
+    priceSymbol: linha.price_symbol,
     createdAt: new Date(linha.created_at),
     updatedAt: new Date(linha.updated_at),
   };
@@ -83,7 +87,14 @@ export class RepositorioAtivoSupabase implements RepositorioAtivo {
   async criar(dados: NewAsset): Promise<Asset> {
     const { data, error } = await this.bd
       .from("assets")
-      .insert({ name: dados.name, category: dados.category, currency: dados.currency, notes: dados.notes ?? null })
+      .insert({
+        name: dados.name,
+        category: dados.category,
+        currency: dados.currency,
+        notes: dados.notes ?? null,
+        price_provider: dados.priceProvider ?? null,
+        price_symbol: dados.priceSymbol ?? null,
+      })
       .select("*")
       .single();
     if (error || !data) throw new Error(`[assets.criar] ${error?.message}`);
@@ -93,7 +104,14 @@ export class RepositorioAtivoSupabase implements RepositorioAtivo {
   async atualizar(id: string, dados: NewAsset): Promise<Asset> {
     const { data, error } = await this.bd
       .from("assets")
-      .update({ name: dados.name, category: dados.category, currency: dados.currency, notes: dados.notes ?? null })
+      .update({
+        name: dados.name,
+        category: dados.category,
+        currency: dados.currency,
+        notes: dados.notes ?? null,
+        price_provider: dados.priceProvider ?? null,
+        price_symbol: dados.priceSymbol ?? null,
+      })
       .eq("id", id)
       .select("*")
       .single();

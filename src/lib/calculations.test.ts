@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   netInvested,
+  netQuantity,
   incomeReceived,
   computeAssetFinancials,
   computeYtd,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/calculations";
 
 function tx(over: Partial<TxLite>): TxLite {
-  return { type: "BUY", date: new Date("2026-01-01"), amount: 100, ...over };
+  return { type: "BUY", date: new Date("2026-01-01"), amount: 100, quantity: null, ...over };
 }
 
 describe("netInvested", () => {
@@ -39,10 +40,31 @@ describe("incomeReceived", () => {
   });
 });
 
+describe("netQuantity", () => {
+  it("BUY soma, SELL subtrai", () => {
+    const txs = [tx({ type: "BUY", quantity: 10 }), tx({ type: "SELL", quantity: 3 }), tx({ type: "BUY", quantity: 2 })];
+    expect(netQuantity(txs)).toBe(9);
+  });
+
+  it("ignora transações sem quantidade (depósitos, comissões, dividendos...)", () => {
+    const txs = [tx({ type: "BUY", quantity: 5 }), tx({ type: "FEE", quantity: null }), tx({ type: "DIVIDEND", quantity: null })];
+    expect(netQuantity(txs)).toBe(5);
+  });
+
+  it("ignora transações depois de asOf", () => {
+    const txs = [
+      tx({ type: "BUY", quantity: 5, date: new Date("2026-01-01") }),
+      tx({ type: "BUY", quantity: 3, date: new Date("2026-06-01") }),
+    ];
+    expect(netQuantity(txs, new Date("2026-03-01"))).toBe(5);
+  });
+});
+
 describe("computeAssetFinancials", () => {
-  it("currentValue e P/L ficam null sem nenhum snapshot", () => {
+  it("currentValue e P/L ficam null sem nenhum snapshot nem cotação ao vivo", () => {
     const financials = computeAssetFinancials([tx({ amount: 100 })], []);
     expect(financials.currentValue).toBeNull();
+    expect(financials.currentValueSource).toBeNull();
     expect(financials.unrealizedPL).toBeNull();
     expect(financials.totalReturn).toBeNull();
     expect(financials.netInvested).toBe(100);
@@ -54,10 +76,23 @@ describe("computeAssetFinancials", () => {
       [{ date: new Date("2026-01-02"), value: 1200 }]
     );
     expect(financials.currentValue).toBe(1200);
+    expect(financials.currentValueSource).toBe("manual");
     expect(financials.unrealizedPL).toBe(200);
     expect(financials.unrealizedPLPercent).toBeCloseTo(0.2);
     expect(financials.totalReturn).toBe(250); // 200 + 50 de dividendos
     expect(financials.totalReturnPercent).toBeCloseTo(0.25);
+  });
+
+  it("cotação ao vivo tem prioridade sobre a última valorização manual", () => {
+    const financials = computeAssetFinancials(
+      [tx({ type: "BUY", amount: 1000 })],
+      [{ date: new Date("2026-01-02"), value: 1200 }],
+      new Date(),
+      1500
+    );
+    expect(financials.currentValue).toBe(1500);
+    expect(financials.currentValueSource).toBe("live");
+    expect(financials.unrealizedPL).toBe(500);
   });
 });
 

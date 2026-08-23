@@ -1,5 +1,6 @@
 import type {
   RepositorioAtivo,
+  RepositorioCotacoes,
   RepositorioPerfil,
   RepositorioTransacao,
   RepositorioValorizacao,
@@ -12,5 +13,6 @@ export type Dependencias = {
   ativos: RepositorioAtivo;
   transacoes: RepositorioTransacao;
   valorizacoes: RepositorioValorizacao;
+  cotacoes: RepositorioCotacoes;
   identidade: FornecedorGestaoIdentidade;
 };

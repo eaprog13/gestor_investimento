@@ -22,7 +22,14 @@ function SubmitButton({ label }: { label: string }) {
 type AssetFormProps = {
   action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   submitLabel: string;
-  defaultValues?: { name: string; category: string; currency: string; notes: string | null };
+  defaultValues?: {
+    name: string;
+    category: string;
+    currency: string;
+    notes: string | null;
+    priceProvider?: "coingecko" | "alphavantage" | null;
+    priceSymbol?: string | null;
+  };
 };
 
 export function AssetForm({ action, submitLabel, defaultValues }: AssetFormProps) {
@@ -95,6 +102,33 @@ export function AssetForm({ action, submitLabel, defaultValues }: AssetFormProps
           defaultValue={defaultValues?.notes ?? ""}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+        <label htmlFor="priceProvider" className="text-sm font-medium text-[var(--text-primary)]">
+          Cotação automática <span className="font-normal text-[var(--text-muted)]">(opcional)</span>
+        </label>
+        <select
+          id="priceProvider"
+          name="priceProvider"
+          defaultValue={defaultValues?.priceProvider ?? ""}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
+        >
+          <option value="">Sem cotação (valorização manual)</option>
+          <option value="coingecko">Cripto — CoinGecko</option>
+          <option value="alphavantage">ETF / ações — Alpha Vantage</option>
+        </select>
+        <input
+          id="priceSymbol"
+          name="priceSymbol"
+          defaultValue={defaultValues?.priceSymbol ?? ""}
+          placeholder="Símbolo: ex. &quot;bitcoin&quot; (CoinGecko) ou &quot;AAPL&quot; (Alpha Vantage)"
+          className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
+        />
+        <p className="text-xs text-[var(--text-muted)]">
+          Cruza o valor investido com o preço de mercado diário. Certificados de Aforro, depósitos e
+          imóveis não têm cotação de mercado — continuam a usar valorizações manuais.
+        </p>
       </div>
 
       {state.status === "error" ? (

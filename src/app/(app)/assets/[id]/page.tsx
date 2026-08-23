@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { getAsset } from "@/lib/data";
 import { computePortfolioTimeSeries } from "@/lib/calculations";
-import { formatCurrency, formatDate, formatPercent, formatTransactionType } from "@/lib/format";
+import { formatCurrency, formatDate, formatPercent, formatPriceProvider, formatTransactionType } from "@/lib/format";
 import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 import { KpiCard } from "@/components/KpiCard";
 import { TransactionForm } from "@/components/TransactionForm";
@@ -52,6 +52,15 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           label="Valor atual"
           value={asset.financials.currentValue ?? 0}
           currency={asset.currency}
+          context={
+            asset.financials.currentValueSource === "live"
+              ? `Cotação ao vivo · ${formatPriceProvider(asset.priceProvider ?? "")}${
+                  asset.livePrice !== null ? ` · ${formatCurrency(asset.livePrice, asset.currency)}/un.` : ""
+                }`
+              : asset.financials.currentValueSource === "manual"
+                ? "Última valorização manual"
+                : undefined
+          }
         />
         <KpiCard
           label="P/L não realizada"

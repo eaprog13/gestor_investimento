@@ -28,16 +28,29 @@ comment on table public.profiles is 'Dados complementares de cada membro da fam�
 -- ── Ativos ─────────────────────────────────────────────────────────────
 -- Um ativo do portefólio: ação, ETF, cripto, imóvel, depósito, poupança...
 -- A categoria é texto livre, definida pelo próprio utilizador.
+-- "price_provider"/"price_symbol": cotação automática diária (ver
+-- src/adapters/quotes/httpQuoteProvider.ts) — opcional, só faz sentido para ativos negociados em
+-- mercado com um símbolo (cripto, ETF, ações). Certificados de Aforro,
+-- depósitos, imóveis, etc. não têm cotação nenhuma para obter (o valor não
+-- vem de um preço de mercado) e ficam sempre a null, por valorização
+-- manual, como até agora.
 create table if not exists public.assets (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  category    text not null,
-  currency    text not null default 'EUR' check (char_length(currency) = 3),
-  notes       text,
-  is_archived boolean not null default false,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  category       text not null,
+  currency       text not null default 'EUR' check (char_length(currency) = 3),
+  notes          text,
+  is_archived    boolean not null default false,
+  price_provider text check (price_provider in ('coingecko', 'alphavantage')),
+  price_symbol   text,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
 );
+
+-- Idempotente: quem já tinha a tabela criada antes de "price_provider"/
+-- "price_symbol" existirem só precisa de voltar a correr este ficheiro.
+alter table public.assets add column if not exists price_provider text check (price_provider in ('coingecko', 'alphavantage'));
+alter table public.assets add column if not exists price_symbol text;
 
 create index if not exists assets_category_idx on public.assets (category);
 

@@ -35,21 +35,38 @@ export const newPasswordSchema = z
     path: ["confirmPassword"],
   });
 
-export const assetSchema = z.object({
-  name: z.string().trim().min(1, "Indica um nome.").max(120),
-  category: z.string().trim().min(1, "Indica uma categoria.").max(60),
-  currency: z
-    .string()
-    .trim()
-    .min(3, "Código de moeda inválido (ex: EUR).")
-    .max(3, "Código de moeda inválido (ex: EUR).")
-    .transform((v) => v.toUpperCase()),
-  notes: z
-    .string()
-    .max(500)
-    .optional()
-    .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined)),
-});
+/** Ver src/adapters/quotes/httpQuoteProvider.ts — fornecedores de cotação ao vivo suportados. */
+export const PRICE_PROVIDERS = ["coingecko", "alphavantage"] as const;
+
+export const assetSchema = z
+  .object({
+    name: z.string().trim().min(1, "Indica um nome.").max(120),
+    category: z.string().trim().min(1, "Indica uma categoria.").max(60),
+    currency: z
+      .string()
+      .trim()
+      .min(3, "Código de moeda inválido (ex: EUR).")
+      .max(3, "Código de moeda inválido (ex: EUR).")
+      .transform((v) => v.toUpperCase()),
+    notes: z
+      .string()
+      .max(500)
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined)),
+    priceProvider: z
+      .string()
+      .optional()
+      .transform((v) => (v === "coingecko" || v === "alphavantage" ? v : null)),
+    priceSymbol: z
+      .string()
+      .max(30)
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v.trim() : null)),
+  })
+  .refine((data) => !data.priceProvider || !!data.priceSymbol, {
+    error: "Indica o símbolo para a cotação automática (ex: bitcoin, ou AAPL).",
+    path: ["priceSymbol"],
+  });
 
 export const transactionSchema = z
   .object({

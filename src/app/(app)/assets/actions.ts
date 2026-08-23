@@ -30,6 +30,8 @@ export async function createAsset(_prevState: ActionState, formData: FormData): 
     category: formData.get("category"),
     currency: formData.get("currency"),
     notes: formData.get("notes"),
+    priceProvider: formData.get("priceProvider"),
+    priceSymbol: formData.get("priceSymbol"),
   });
   if (!parsed.success) {
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
@@ -52,6 +54,8 @@ export async function updateAsset(
     category: formData.get("category"),
     currency: formData.get("currency"),
     notes: formData.get("notes"),
+    priceProvider: formData.get("priceProvider"),
+    priceSymbol: formData.get("priceSymbol"),
   });
   if (!parsed.success) {
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
