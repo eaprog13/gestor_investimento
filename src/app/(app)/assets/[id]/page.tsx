@@ -52,9 +52,11 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             Cotação automática ligada ({formatPriceProvider(asset.priceProvider)}) mas sem resposta ainda.
           </span>{" "}
           Causas prováveis: o símbolo (&quot;{asset.priceSymbol}&quot;) está errado ou não existe no fornecedor
-          {asset.priceProvider === "alphavantage"
-            ? ", a ALPHA_VANTAGE_API_KEY não está configurada no ambiente, ou a quota diária (25 pedidos/dia no plano grátis) esgotou-se"
-            : ""}
+          {asset.priceProvider === "coingecko"
+            ? ' (lembra-te: é o "id" da CoinGecko, não o ticker — ex. "bitcoin", não "BTC"; "binancecoin", não "BNB")'
+            : asset.priceProvider === "alphavantage"
+              ? ", a ALPHA_VANTAGE_API_KEY não está configurada no ambiente, ou a quota diária (25 pedidos/dia no plano grátis) esgotou-se"
+              : ""}
           . Até resolver, este ativo usa a última valorização manual (se existir) ou fica de fora dos totais do
           dashboard.
         </div>

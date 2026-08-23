@@ -126,8 +126,12 @@ export function AssetForm({ action, submitLabel, defaultValues }: AssetFormProps
           className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
         />
         <p className="text-xs text-[var(--text-muted)]">
-          Cruza o valor investido com o preço de mercado diário. Certificados de Aforro, depósitos e
-          imóveis não têm cotação de mercado — continuam a usar valorizações manuais.
+          Cruza o valor investido com o preço de mercado diário. Na CoinGecko o símbolo é o{" "}
+          <strong className="text-[var(--text-secondary)]">id</strong> deles, não o ticker da bolsa — ex: Bitcoin é{" "}
+          <code className="rounded bg-[var(--background)] px-1">bitcoin</code> (não &quot;BTC&quot;), Binance Coin é{" "}
+          <code className="rounded bg-[var(--background)] px-1">binancecoin</code> (não &quot;BNB&quot;); confirma em
+          coingecko.com/pt/moedas/&lt;nome&gt; — o id está no URL. Certificados de Aforro, depósitos e imóveis não
+          têm cotação de mercado — continuam a usar valorizações manuais.
         </p>
       </div>
 
