@@ -14,34 +14,56 @@ const REVALIDATE_SEGUNDOS = 60 * 60 * 24;
 // cai no fallback (valorização manual) como se a API tivesse falhado.
 const TIMEOUT_MS = 5_000;
 
-// O plano grátis da Alpha Vantage diz suportar 1 pedido/segundo, mas dois
-// pedidos "ao mesmo tempo" (ex.: Promise.all a buscar a cotação de vários
-// ativos de uma vez, ver src/lib/data.ts) fazem a API rejeitar um deles
-// com uma mensagem de aviso ("Information: ... 1 request per second..."),
-// devolvida com HTTP 200 (não é um erro), que fica indistinguível de "sem
-// cotação". Confirmado ao vivo (3 pedidos em paralelo ao mesmo símbolo):
-// com 1.1s de intervalo ainda falhava um; com 2.2s, os três passaram —
-// o limite real parece mais apertado do que "1/segundo" à letra. Serializa
-// os pedidos com esta fila em vez de os deixar disparar todos de uma vez.
-//
-// Contrapartida consciente: com N ativos ligados à Alpha Vantage no mesmo
-// render, o tempo total sobe para ~N × 2.2s (são sequenciais, não param
-// os outros pedidos, só os espaça) — para um portefólio pessoal (poucos
-// ativos) isto é aceitável; com muitos ativos na Alpha Vantage em
-// simultâneo, pode valer a pena rever (cache mais agressiva, ou aceitar
-// que só o primeiro ativo por render recebe cotação fresca).
-const INTERVALO_MINIMO_ALPHA_VANTAGE_MS = 2_200;
-let proximoPedidoAlphaVantageDisponivelEm = 0;
-
-async function aguardarVezAlphaVantage(): Promise<void> {
-  const agora = Date.now();
-  const disponivelEm = Math.max(agora, proximoPedidoAlphaVantageDisponivelEm);
-  proximoPedidoAlphaVantageDisponivelEm = disponivelEm + INTERVALO_MINIMO_ALPHA_VANTAGE_MS;
-  const espera = disponivelEm - agora;
-  if (espera > 0) await new Promise((resolve) => setTimeout(resolve, espera));
+/**
+ * Serializa pedidos ao mesmo fornecedor com pelo menos "intervaloMs" entre
+ * cada um, em vez de os deixar disparar todos de uma vez (Promise.all a
+ * buscar a cotação de vários ativos, ver src/lib/data.ts) — os dois
+ * fornecedores rejeitam pedidos em rajada, mesmo dentro da quota total (ver
+ * os dois comentários abaixo, cada um com o teste ao vivo que confirmou o
+ * intervalo). Devolve uma função "aguardarVez()" independente por
+ * fornecedor (cada um com o seu próprio relógio).
+ */
+function criarLimitadorDeRajada(intervaloMs: number) {
+  let proximoDisponivelEm = 0;
+  return async function aguardarVez(): Promise<void> {
+    const agora = Date.now();
+    const disponivelEm = Math.max(agora, proximoDisponivelEm);
+    proximoDisponivelEm = disponivelEm + intervaloMs;
+    const espera = disponivelEm - agora;
+    if (espera > 0) await new Promise((resolve) => setTimeout(resolve, espera));
+  };
 }
 
+// O plano grátis da Alpha Vantage diz suportar 1 pedido/segundo, mas dois
+// pedidos "ao mesmo tempo" fazem a API rejeitar um deles com uma mensagem
+// de aviso ("Information: ... 1 request per second..."), devolvida com
+// HTTP 200 (não é um erro), que fica indistinguível de "sem cotação".
+// Confirmado ao vivo (3 pedidos em paralelo ao mesmo símbolo): com 1.1s de
+// intervalo ainda falhava um; com 2.2s, os três passaram — o limite real
+// parece mais apertado do que "1/segundo" à letra.
+//
+// Contrapartida consciente: com N ativos ligados à Alpha Vantage no mesmo
+// render, o tempo total sobe para ~N × 2.2s (são sequenciais, não param os
+// outros pedidos, só os espaça) — para um portefólio pessoal (poucos
+// ativos) isto é aceitável; com muitos ativos na Alpha Vantage em
+// simultâneo, pode valer a pena rever.
+const aguardarVezAlphaVantage = criarLimitadorDeRajada(2_200);
+
+// A CoinGecko não documenta um número exato para o endpoint público sem
+// chave (só documentam o plano "Demo", com chave registada: 100/min) — ao
+// testar, 5 pedidos em paralelo passaram bem, mas 10 (com este IP de
+// desenvolvimento já a ter feito vários pedidos antes) levaram um 429 em
+// TODOS, e o bloqueio durou bem mais do que alguns segundos a passar (não
+// é um limite por-segundo como a Alpha Vantage, parece mais por-minuto,
+// com arrefecimento lento). 1.5s de intervalo é uma margem conservadora
+// dado não haver um número oficial para confiar — se um dia isto continuar
+// a falhar com poucos ativos cripto, vale a pena registar uma chave grátis
+// da CoinGecko (ver README) em vez de tentar afinar isto às cegas.
+const aguardarVezCoinGecko = criarLimitadorDeRajada(1_500);
+
 async function obterPrecoCoinGecko(symbol: string, currency: string): Promise<number | null> {
+  await aguardarVezCoinGecko();
+
   const moeda = currency.toLowerCase();
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(symbol)}&vs_currencies=${moeda}`;
 
@@ -49,7 +71,10 @@ async function obterPrecoCoinGecko(symbol: string, currency: string): Promise<nu
     next: { revalidate: REVALIDATE_SEGUNDOS },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!resposta.ok) return null;
+  if (!resposta.ok) {
+    if (resposta.status === 429) console.warn(`[quotes] CoinGecko recusou o pedido (${symbol}) — limite de pedidos.`);
+    return null;
+  }
 
   const corpo = (await resposta.json()) as Record<string, Record<string, number>>;
   return corpo[symbol]?.[moeda] ?? null;
