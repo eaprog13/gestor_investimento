@@ -117,6 +117,15 @@ npm run dev
 
 Abre [http://localhost:3000](http://localhost:3000).
 
+**Antes de começar a usar a app a sério** (dados reais, não de teste):
+se alguma vez correste `npm run seed` com `SEED_DEMO_DATA=true`, corre
+`supabase/clean-demo-data.sql` no SQL Editor do Supabase — apaga só os 3
+ativos de demonstração (ETF MSCI World, Depósito a Prazo — Banco X,
+Bitcoin) e as suas transações/valorizações; não toca em utilizadores nem
+em nada que tenhas criado tu. Confirma também que `SEED_DEMO_DATA` não
+fica `true` nas variáveis de ambiente de produção (Vercel), para não
+voltar a entrar num redeploy que corra a seed outra vez.
+
 ## Testes
 
 ```bash
