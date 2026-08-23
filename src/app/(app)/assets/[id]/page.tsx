@@ -81,10 +81,21 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Nova transação</h2>
           <TransactionForm action={createTransaction} submitLabel="Adicionar transação" fixedAssetId={asset.id} />
         </section>
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Nova valorização</h2>
-          <ValuationForm action={createValuation} fixedAssetId={asset.id} />
-        </section>
+        {asset.priceProvider ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+            <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Valorização</h2>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Este ativo tem cotação automática ligada ({formatPriceProvider(asset.priceProvider)}) — o valor atual e
+              a evolução ao longo do tempo já são atualizados sozinhos, todos os dias, a partir do preço de mercado.
+              Não precisas de preencher nada aqui.
+            </p>
+          </section>
+        ) : (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+            <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Nova valorização</h2>
+            <ValuationForm action={createValuation} fixedAssetId={asset.id} />
+          </section>
+        )}
       </div>
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">

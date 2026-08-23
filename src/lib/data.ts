@@ -62,14 +62,68 @@ function valorAoVivo(price: number | null, transactions: TxLite[], asOf: Date): 
   return price * netQuantity(transactions, asOf);
 }
 
+/** Chave de dia (yyyy-mm-dd, em UTC) — usada para comparar/gravar "hoje" de forma determinística, sem depender do fuso horário do servidor. */
+function chaveDia(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Guarda automaticamente a valorização de hoje a partir da cotação ao vivo
+ * — sem isto, "Evolução do valor" (que só lê valuation_snapshots, nunca a
+ * cotação ao vivo) ficava sempre vazio para um ativo só com cotação
+ * automática e nenhuma valorização manual. Upsert por (asset_id, date): só
+ * a primeira chamada do dia grava de facto, as seguintes (outros renders
+ * no mesmo dia) veem "hoje" já presente em asset.valuations e saem sem
+ * tocar na base de dados. Nunca lança — uma falha aqui não pode partir a
+ * página que só queria mostrar o valor atual.
+ */
+async function sincronizarValorizacaoAutomatica(
+  asset: { id: string; valuations: { date: Date }[] },
+  liveValue: number | null
+): Promise<void> {
+  if (liveValue === null) return;
+  const hoje = chaveDia(new Date());
+  if (asset.valuations.some((v) => chaveDia(v.date) === hoje)) return;
+
+  try {
+    await obterContentor().valorizacoes.criarOuAtualizar({
+      assetId: asset.id,
+      date: new Date(hoje),
+      value: liveValue,
+      notes: "Cotação automática",
+    });
+  } catch (erro) {
+    console.error(`[quotes] falha a guardar valorização automática (ativo ${asset.id}):`, erro);
+  }
+}
+
+type AtivoComCotacao = {
+  id: string;
+  priceProvider: PriceProvider | null;
+  priceSymbol: string | null;
+  currency: string;
+  transactions: TxLite[];
+  valuations: { date: Date }[];
+};
+
+/** Cotação ao vivo + valor (preço × unidades) de um ativo, sincronizando também a valorização automática de hoje quando aplicável. */
+async function precoEValorAoVivo(
+  asset: AtivoComCotacao,
+  asOf: Date
+): Promise<{ livePrice: number | null; liveValue: number | null }> {
+  const livePrice = await obterPrecoAoVivo(asset);
+  const liveValue = valorAoVivo(livePrice, asset.transactions, asOf);
+  await sincronizarValorizacaoAutomatica(asset, liveValue);
+  return { livePrice, liveValue };
+}
+
 export async function getAssets(options: { includeArchived?: boolean } = {}) {
   const assets = await obterContentor().ativos.listar({ incluirArquivados: options.includeArchived });
   const asOf = new Date();
 
   return Promise.all(
     assets.map(async (asset) => {
-      const livePrice = await obterPrecoAoVivo(asset);
-      const liveValue = valorAoVivo(livePrice, asset.transactions, asOf);
+      const { liveValue } = await precoEValorAoVivo(asset, asOf);
       return {
         ...asset,
         financials: computeAssetFinancials(asset.transactions, asset.valuations, asOf, liveValue),
@@ -84,8 +138,7 @@ export async function getAsset(id: string) {
   if (!asset) return null;
 
   const asOf = new Date();
-  const livePrice = await obterPrecoAoVivo(asset);
-  const liveValue = valorAoVivo(livePrice, asset.transactions, asOf);
+  const { livePrice, liveValue } = await precoEValorAoVivo(asset, asOf);
 
   return {
     ...asset,
@@ -124,7 +177,10 @@ export async function getDashboardData() {
   const asOf = new Date();
 
   const ledgers = await Promise.all(
-    assets.map(async (asset) => toLedger(asset, await obterPrecoAoVivo(asset)))
+    assets.map(async (asset) => {
+      const { livePrice } = await precoEValorAoVivo(asset, asOf);
+      return toLedger(asset, livePrice);
+    })
   );
 
   const totalInvested = ledgers.reduce((sum, a) => sum + netInvested(a.transactions, asOf), 0);
