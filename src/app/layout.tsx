@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Gestor de Investimento",
   description: "Livro-razão e dashboard do portefólio familiar.",
+  // App privada (dados financeiros da família) — nunca deve aparecer em
+  // motores de busca. Ver também src/app/robots.ts.
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
