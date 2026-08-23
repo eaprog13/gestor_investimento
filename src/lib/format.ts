@@ -1,3 +1,5 @@
+import type { TrendContext } from "@/lib/calculations";
+
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 function getCurrencyFormatter(currency: string) {
@@ -23,6 +25,14 @@ const percentFormatter = new Intl.NumberFormat("pt-PT", {
 export function formatPercent(value: number) {
   if (!Number.isFinite(value)) return "—";
   return percentFormatter.format(value);
+}
+
+/** Frase de cruzamento com o histórico para os KpiCard do dashboard — ver computeTrendContext. */
+export function formatTrendContext(ctx: TrendContext | null): string | undefined {
+  if (!ctx) return undefined;
+  if (ctx.direction === "flat") return `Estável nos últimos ${ctx.windowMonths} meses`;
+  const rotulo = ctx.direction === "up" ? "acima" : "abaixo";
+  return `${formatPercent(Math.abs(ctx.percentVsAverage))} ${rotulo} da média dos últimos ${ctx.windowMonths} meses`;
 }
 
 const dateFormatter = new Intl.DateTimeFormat("pt-PT", {

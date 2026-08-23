@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Wallet, Receipt, Users, Menu, X } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Logo } from "@/components/Logo";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -42,11 +43,10 @@ export function Nav({ userName }: { userName: string }) {
           app e as ações terem larguras diferentes. */}
       <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
         {/* Nome completo só a partir de "md" — abaixo disso quebrava em 2
-            linhas e empurrava a altura do cabeçalho. */}
-        <span className="justify-self-start truncate text-sm font-semibold tracking-tight text-[var(--text-primary)]">
-          <span className="hidden md:inline">Gestor de Investimento</span>
-          <span className="md:hidden">Investimento</span>
-        </span>
+            linhas e empurrava a altura do cabeçalho (ver Logo.tsx). */}
+        <Link href="/dashboard" className="justify-self-start">
+          <Logo />
+        </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
           {LINKS.map(({ href, label, icon: Icon }) => {

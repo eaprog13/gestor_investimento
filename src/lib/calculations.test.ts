@@ -7,6 +7,7 @@ import {
   computeAllocation,
   computePortfolioTimeSeries,
   computeAssetPerformance,
+  computeTrendContext,
   type AssetLedger,
   type TxLite,
 } from "@/lib/calculations";
@@ -192,6 +193,42 @@ describe("computePortfolioTimeSeries", () => {
     expect(series).toHaveLength(2);
     // Na segunda data, o valor de "a1" é reportado com forward-fill (100).
     expect(series[1]).toEqual({ date: "2026-02-01", value: 160, invested: 150 });
+  });
+});
+
+describe("computeTrendContext", () => {
+  it("devolve null com menos de 2 pontos", () => {
+    expect(computeTrendContext([{ date: "2026-06-01", value: 100 }])).toBeNull();
+  });
+
+  it("null quando a janela de meses fica sem pontos suficientes", () => {
+    const series = [
+      { date: "2020-01-01", value: 50 },
+      { date: "2026-06-01", value: 100 },
+    ];
+    expect(computeTrendContext(series, 6)).toBeNull();
+  });
+
+  it("acima da média quando o último ponto é maior que a média da janela", () => {
+    const series = [
+      { date: "2026-01-01", value: 100 },
+      { date: "2026-02-01", value: 100 },
+      { date: "2026-03-01", value: 100 },
+      { date: "2026-04-01", value: 130 },
+    ];
+    const resultado = computeTrendContext(series, 6);
+    expect(resultado?.direction).toBe("up");
+    expect(resultado?.percentVsAverage).toBeCloseTo((130 - 107.5) / 107.5);
+  });
+
+  it("abaixo da média quando o último ponto é menor que a média da janela", () => {
+    const series = [
+      { date: "2026-01-01", value: 100 },
+      { date: "2026-02-01", value: 100 },
+      { date: "2026-03-01", value: 70 },
+    ];
+    const resultado = computeTrendContext(series, 6);
+    expect(resultado?.direction).toBe("down");
   });
 });
 

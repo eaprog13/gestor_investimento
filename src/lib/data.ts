@@ -7,11 +7,14 @@ import {
   computeAssetPerformance,
   computeAllocation,
   computePortfolioTimeSeries,
+  computeTrendContext,
   computeYtd,
   incomeReceived,
   netInvested,
   type AssetLedger,
+  type TimeSeriesPoint,
 } from "@/lib/calculations";
+import { formatTrendContext } from "@/lib/format";
 
 function toLedger(asset: {
   id: string;
@@ -97,6 +100,20 @@ export async function getDashboardData() {
   const timeSeries = computePortfolioTimeSeries(ledgers);
   const recentTransactions = await getRecentTransactions(8);
 
+  // Sparklines dos KpiCard: só a forma da tendência, por isso os valores de
+  // "ganho" aqui ignoram o rendimento (dividendos/juros) que só entra no
+  // sinceInceptionGain exato — suficiente para o traço, não substitui o
+  // valor apresentado no cartão.
+  const ytdSeries = timeSeries.filter((p) => new Date(p.date).getFullYear() === asOf.getFullYear());
+  const asGainSeries = (series: TimeSeriesPoint[]) => series.map((p) => ({ date: p.date, value: p.value - p.invested }));
+
+  const topPerformers = performance.filter((r) => r.unrealizedPLPercent !== null).slice(0, 3);
+  const bestPerformer = topPerformers[0] ?? null;
+  const bestPerformerAsset = bestPerformer ? assets.find((a) => a.id === bestPerformer.id) : undefined;
+  const bestPerformerSparkline = bestPerformerAsset
+    ? [...bestPerformerAsset.valuations].sort((a, b) => a.date.getTime() - b.date.getTime()).map((v) => v.value)
+    : undefined;
+
   return {
     kpis: {
       totalValue,
@@ -106,11 +123,25 @@ export async function getDashboardData() {
       ytdGainAmount: ytd.gainAmount,
       ytdGainPercent: ytd.gainPercent,
       ytdIncome: ytd.income,
+      totalIncome,
     },
+    trends: {
+      totalValue: timeSeries.map((p) => p.value),
+      totalInvested: timeSeries.map((p) => p.invested),
+      sinceInceptionGain: timeSeries.map((p) => p.value - p.invested),
+      ytdGain: ytdSeries.map((p) => p.value - p.invested),
+      bestPerformer: bestPerformerSparkline,
+    },
+    context: {
+      totalValue: formatTrendContext(computeTrendContext(timeSeries)),
+      sinceInceptionGain: formatTrendContext(computeTrendContext(asGainSeries(timeSeries))),
+      ytdGain: formatTrendContext(computeTrendContext(asGainSeries(ytdSeries), 2)),
+    },
+    bestPerformer,
     allocation,
     timeSeries,
     performance,
-    topPerformers: performance.filter((r) => r.unrealizedPLPercent !== null).slice(0, 3),
+    topPerformers,
     bottomPerformers: performance
       .filter((r) => r.unrealizedPLPercent !== null)
       .slice(-3)

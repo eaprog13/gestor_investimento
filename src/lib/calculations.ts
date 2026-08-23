@@ -207,6 +207,43 @@ export function computeAllocation(
     .sort((a, b) => b.value - a.value);
 }
 
+export type TrendContext = {
+  direction: "up" | "down" | "flat";
+  /** Fração (0.05 = 5%) do valor mais recente vs. a média da janela — não percentagem já formatada. */
+  percentVsAverage: number;
+  windowMonths: number;
+};
+
+/**
+ * Compara o último ponto de uma série temporal com a média dos últimos
+ * "windowMonths" — dá o "cruzamento" que aparece nos KpiCard do dashboard
+ * (ex: "3.2% acima da média dos últimos 6 meses"). Devolve null quando não
+ * há histórico suficiente para a janela ter significado (menos de 2 pontos,
+ * ou média zero — evita dividir por zero).
+ */
+export function computeTrendContext(
+  series: { date: string; value: number }[],
+  windowMonths = 6
+): TrendContext | null {
+  if (series.length < 2) return null;
+
+  const last = series[series.length - 1]!;
+  const asOf = new Date(last.date);
+  const windowStart = new Date(asOf);
+  windowStart.setMonth(windowStart.getMonth() - windowMonths);
+
+  const windowPoints = series.filter((p) => new Date(p.date) >= windowStart);
+  if (windowPoints.length < 2) return null;
+
+  const average = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
+  if (average === 0) return null;
+
+  const percentVsAverage = (last.value - average) / average;
+  const direction = percentVsAverage > 0.001 ? "up" : percentVsAverage < -0.001 ? "down" : "flat";
+
+  return { direction, percentVsAverage, windowMonths };
+}
+
 export type TimeSeriesPoint = { date: string; value: number; invested: number };
 
 /**
