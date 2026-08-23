@@ -17,6 +17,39 @@ describe("assetSchema", () => {
     expect(assetSchema.safeParse({ name: "", category: "Y", currency: "EUR" }).success).toBe(false);
     expect(assetSchema.safeParse({ name: "X", category: "", currency: "EUR" }).success).toBe(false);
   });
+
+  it("cotação automática é opcional — sem fornecedor, sem símbolo, é válido", () => {
+    const result = assetSchema.safeParse({ name: "Depósito", category: "Poupanças", currency: "EUR" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.priceProvider).toBeNull();
+      expect(result.data.priceSymbol).toBeNull();
+    }
+  });
+
+  it("aceita fornecedor + símbolo válidos (id CoinGecko e ticker com sufixo de bolsa)", () => {
+    const cripto = assetSchema.safeParse({ name: "BTC", category: "Cripto", currency: "EUR", priceProvider: "coingecko", priceSymbol: "bitcoin" });
+    expect(cripto.success).toBe(true);
+
+    const etf = assetSchema.safeParse({ name: "ETF", category: "ETFs", currency: "EUR", priceProvider: "alphavantage", priceSymbol: "IWDA.LON" });
+    expect(etf.success).toBe(true);
+  });
+
+  it("rejeita fornecedor sem símbolo", () => {
+    const result = assetSchema.safeParse({ name: "BTC", category: "Cripto", currency: "EUR", priceProvider: "coingecko" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita símbolo com caracteres inválidos (ex: espaços)", () => {
+    const result = assetSchema.safeParse({
+      name: "BTC",
+      category: "Cripto",
+      currency: "EUR",
+      priceProvider: "coingecko",
+      priceSymbol: "bit coin!",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("transactionSchema", () => {

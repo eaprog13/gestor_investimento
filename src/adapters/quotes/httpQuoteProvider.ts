@@ -8,11 +8,20 @@ import type { PriceProvider } from "@/core/types";
 // é literalmente o que foi pedido (comparar com "os valores diários").
 const REVALIDATE_SEGUNDOS = 60 * 60 * 24;
 
+// Um símbolo mal configurado ou uma API lenta/em baixo não pode bloquear o
+// render da página à espera de um pedido pendurado — sobretudo com vários
+// ativos a pedir em paralelo (ver Promise.all em src/lib/data.ts). Aborta e
+// cai no fallback (valorização manual) como se a API tivesse falhado.
+const TIMEOUT_MS = 5_000;
+
 async function obterPrecoCoinGecko(symbol: string, currency: string): Promise<number | null> {
   const moeda = currency.toLowerCase();
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(symbol)}&vs_currencies=${moeda}`;
 
-  const resposta = await fetch(url, { next: { revalidate: REVALIDATE_SEGUNDOS } });
+  const resposta = await fetch(url, {
+    next: { revalidate: REVALIDATE_SEGUNDOS },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
   if (!resposta.ok) return null;
 
   const corpo = (await resposta.json()) as Record<string, Record<string, number>>;
@@ -27,7 +36,10 @@ async function obterPrecoAlphaVantage(symbol: string): Promise<number | null> {
   }
 
   const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${chave}`;
-  const resposta = await fetch(url, { next: { revalidate: REVALIDATE_SEGUNDOS } });
+  const resposta = await fetch(url, {
+    next: { revalidate: REVALIDATE_SEGUNDOS },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
   if (!resposta.ok) return null;
 
   const corpo = (await resposta.json()) as { "Global Quote"?: { "05. price"?: string } };
@@ -41,9 +53,11 @@ async function obterPrecoAlphaVantage(symbol: string): Promise<number | null> {
 /**
  * Cotações via HTTP — CoinGecko (cripto, API pública sem chave) e Alpha
  * Vantage (ETF/ações, precisa de ALPHA_VANTAGE_API_KEY grátis, ver
- * .env.example). Nunca lança: um símbolo errado ou uma API em baixo só
- * significa "sem cotação hoje", quem chama usa a última valorização manual
- * como reserva (ver core/services/quoteService.ts).
+ * .env.example). Nunca lança: um símbolo errado, um timeout (ver
+ * TIMEOUT_MS) ou uma API em baixo só significam "sem cotação hoje", quem
+ * chama usa a última valorização manual como reserva (ver
+ * computeAssetFinancials em src/lib/calculations.ts, chamado a partir de
+ * src/lib/data.ts).
  *
  * Nota sobre moeda na Alpha Vantage: GLOBAL_QUOTE devolve o preço na moeda
  * da própria bolsa onde o símbolo cota, sem indicar qual — por isso escolhe

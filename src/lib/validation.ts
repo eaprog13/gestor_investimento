@@ -66,6 +66,16 @@ export const assetSchema = z
   .refine((data) => !data.priceProvider || !!data.priceSymbol, {
     error: "Indica o símbolo para a cotação automática (ex: bitcoin, ou AAPL).",
     path: ["priceSymbol"],
+  })
+  // Letras/números/ponto/hífen chega para ids da CoinGecko ("bitcoin") e
+  // tickers da Alpha Vantage, incluindo sufixo de bolsa ("IWDA.LON") — só
+  // para apanhar erros de digitação cedo (espaços, símbolos estranhos);
+  // vai para o URL do fetch sempre com encodeURIComponent (ver
+  // src/adapters/quotes/httpQuoteProvider.ts), por isso não é uma questão
+  // de injeção, é higiene de dados.
+  .refine((data) => data.priceSymbol === null || /^[a-zA-Z0-9._-]+$/.test(data.priceSymbol), {
+    error: "Símbolo inválido — usa só letras, números, ponto ou hífen (ex: bitcoin, AAPL, IWDA.LON).",
+    path: ["priceSymbol"],
   });
 
 export const transactionSchema = z
