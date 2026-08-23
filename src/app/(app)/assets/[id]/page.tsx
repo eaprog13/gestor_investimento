@@ -46,6 +46,20 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
         </Link>
       </div>
 
+      {asset.priceProvider && asset.livePrice === null ? (
+        <div className="rounded-xl border border-[var(--delta-bad)]/30 bg-[var(--delta-bad)]/10 px-4 py-3 text-sm text-[var(--text-primary)]">
+          <span className="font-medium">
+            Cotação automática ligada ({formatPriceProvider(asset.priceProvider)}) mas sem resposta ainda.
+          </span>{" "}
+          Causas prováveis: o símbolo (&quot;{asset.priceSymbol}&quot;) está errado ou não existe no fornecedor
+          {asset.priceProvider === "alphavantage"
+            ? ", a ALPHA_VANTAGE_API_KEY não está configurada no ambiente, ou a quota diária (25 pedidos/dia no plano grátis) esgotou-se"
+            : ""}
+          . Até resolver, este ativo usa a última valorização manual (se existir) ou fica de fora dos totais do
+          dashboard.
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KpiCard label="Investido" value={asset.financials.netInvested} currency={asset.currency} />
         <KpiCard

@@ -169,10 +169,16 @@ export type YtdResult = {
   income: number;
   gainAmount: number;
   gainPercent: number | null;
+  /**
+   * Nº de ativos sem valor final conhecido (sem cotação ao vivo nem
+   * valorização manual) — ficam de fora de startValue/endValue/gainAmount,
+   * nunca tratados como "valem 0" (ver computeYtd).
+   */
+  ativosSemValorFinal: number;
 };
 
 /**
- * Ganho YTD do portefólio (soma de todos os ativos):
+ * Ganho YTD do portefólio (soma dos ativos com valor final conhecido):
  *   Ganho € = (V_end − V_start − netFlowYTD) + incomeYTD
  *   Ganho % = Ganho € ÷ V_start
  *
@@ -188,6 +194,21 @@ export type YtdResult = {
  * artificialmente o ganho em euros exibido (ver src/lib/calculations.test.ts,
  * "gainAmount inclui o cost basis pré-ano quando falta snapshot de arranque").
  *
+ * V_end vem, por ativo, da cotação ao vivo (livePrice × unidades detidas —
+ * ver netQuantity) quando disponível, senão da última valorização manual.
+ * Um ativo sem NENHuma das duas (nunca foi valorizado, e sem cotação ao
+ * vivo bem-sucedida) fica de fora do somatório inteiro — start, end,
+ * netFlow E income desse ativo — em vez de "valer 0": um ativo cujo valor
+ * não se conhece não é o mesmo que um ativo que vale zero, e tratá-lo como
+ * zero fazia o ganho aparecer artificialmente negativo (quase igual ao
+ * capital investido, com o sinal trocado) assim que um ativo era criado e
+ * ainda não tinha nem cotação nem valorização — ver
+ * "ganho fica de fora de ativos sem valor final conhecido, não trata como
+ * zero" em calculations.test.ts. Tem de ser tudo-ou-nada por ativo (nunca
+ * só endValue de fora com netFlow/income a entrar) para a fórmula acima
+ * continuar a bater certo — misturar âmbitos diferentes dava o mesmo tipo
+ * de erro, só que mais difícil de detetar.
+ *
  * É uma aproximação money-weighted simples (não XIRR/TWR), deliberadamente
  * simples dado o requisito de "stack o mais simples possível".
  */
@@ -200,12 +221,21 @@ export function computeYtd(assets: AssetLedger[], asOf: Date = new Date()): YtdR
   let endValue = 0;
   let netFlow = 0;
   let income = 0;
+  let ativosSemValorFinal = 0;
 
   for (const asset of assets) {
+    const liveValue =
+      asset.livePrice != null ? asset.livePrice * netQuantity(asset.transactions, asOf) : null;
+    const vEnd = liveValue ?? latestValue(asset.snapshots, asOf);
+
+    if (vEnd === null) {
+      ativosSemValorFinal += 1;
+      continue;
+    }
+
     const vStart = latestValue(asset.snapshots, dayBeforeYearStart);
-    const vEnd = latestValue(asset.snapshots, asOf);
     startValue += vStart ?? netInvested(asset.transactions, dayBeforeYearStart);
-    endValue += vEnd ?? 0;
+    endValue += vEnd;
     netFlow += netFlowBetween(asset.transactions, yearStart, asOf);
     income += incomeBetween(asset.transactions, yearStart, asOf);
   }
@@ -213,7 +243,7 @@ export function computeYtd(assets: AssetLedger[], asOf: Date = new Date()): YtdR
   const gainAmount = endValue - startValue - netFlow + income;
   const gainPercent = startValue > 0 ? gainAmount / startValue : null;
 
-  return { year, startValue, endValue, netFlow, income, gainAmount, gainPercent };
+  return { year, startValue, endValue, netFlow, income, gainAmount, gainPercent, ativosSemValorFinal };
 }
 
 export type AllocationSlice = { category: string; value: number; pct: number };
@@ -335,4 +365,58 @@ export function computeAssetPerformance(
       if (b.unrealizedPLPercent === null) return -1;
       return b.unrealizedPLPercent - a.unrealizedPLPercent;
     });
+}
+
+export type PortfolioTotals = {
+  /** Soma do valor atual só dos ativos com valor conhecido (cotação ao vivo ou valorização manual). */
+  totalValue: number;
+  /** Cost basis só dos ativos com valor conhecido — âmbito igual ao de totalValue, para o ganho ficar comparável. */
+  investedComValorConhecido: number;
+  sinceInceptionGain: number;
+  sinceInceptionGainPercent: number | null;
+  /** Rendimento (dividendos/juros) de TODOS os ativos — ao contrário de totalValue, isto é sempre um facto conhecido, não depende de cotação nenhuma. */
+  totalIncome: number;
+  /** Nº de ativos sem valor atual conhecido — excluídos de totalValue/sinceInceptionGain, nunca tratados como "valem 0" (ver computePortfolioTotals). */
+  ativosSemValor: number;
+};
+
+/**
+ * Totais do portefólio a partir de computeAssetPerformance. Um ativo sem
+ * valor atual conhecido (currentValue null — sem cotação ao vivo bem-
+ * sucedida nem valorização manual) fica de FORA de totalValue e do capital
+ * investido usado no ganho, em vez de contar como "vale 0": um ativo criado
+ * hoje, ainda sem nenhuma valorização, não perdeu o que foi investido nele
+ * — só ainda não sabemos quanto vale. Tratá-lo como zero fazia
+ * "Ganho desde o início" aparecer quase igual a "-Total investido" assim
+ * que se criava um ativo novo, mesmo sem ele ter perdido valor nenhum (ver
+ * "sinceInceptionGain ignora ativos sem valor atual, não trata como zero"
+ * em calculations.test.ts). `ativosSemValor` existe para a UI poder avisar
+ * que os totais são parciais em vez de aparentar precisão que não existe.
+ *
+ * totalIncome fica de fora desta exclusão — rendimento já recebido é um
+ * facto conhecido pelas transações, não depende de sabermos o valor atual.
+ */
+export function computePortfolioTotals(performance: AssetPerformanceRow[]): PortfolioTotals {
+  let totalValue = 0;
+  let investedComValorConhecido = 0;
+  let incomeComValorConhecido = 0;
+  let totalIncome = 0;
+  let ativosSemValor = 0;
+
+  for (const row of performance) {
+    totalIncome += row.incomeReceived;
+    if (row.currentValue === null) {
+      ativosSemValor += 1;
+      continue;
+    }
+    totalValue += row.currentValue;
+    investedComValorConhecido += row.netInvested;
+    incomeComValorConhecido += row.incomeReceived;
+  }
+
+  const sinceInceptionGain = totalValue - investedComValorConhecido + incomeComValorConhecido;
+  const sinceInceptionGainPercent =
+    investedComValorConhecido > 0 ? sinceInceptionGain / investedComValorConhecido : null;
+
+  return { totalValue, investedComValorConhecido, sinceInceptionGain, sinceInceptionGainPercent, totalIncome, ativosSemValor };
 }

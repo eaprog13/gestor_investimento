@@ -8,8 +8,10 @@ import {
   computeAllocation,
   computePortfolioTimeSeries,
   computeAssetPerformance,
+  computePortfolioTotals,
   computeTrendContext,
   type AssetLedger,
+  type AssetPerformanceRow,
   type TxLite,
 } from "@/lib/calculations";
 
@@ -186,6 +188,58 @@ describe("computeYtd", () => {
     expect(ytd.income).toBe(100);
     expect(ytd.gainAmount).toBe(200); // (5100-5000-0) + 100
   });
+
+  it("ativo sem valor final conhecido (sem cotação ao vivo nem valorização) fica de fora — não conta como 'vale 0'", () => {
+    // Regressão real: um ativo recém-criado (só com a transação de compra,
+    // ainda sem cotação ao vivo bem-sucedida nem nenhuma valorização
+    // manual) fazia endValue subir 0 mas startValue continuar a cair no
+    // fallback do cost basis — o ganho aparecia quase igual a
+    // "-investido", como se o ativo tivesse perdido tudo, quando na
+    // verdade só ainda não se sabe quanto vale.
+    const semValor: AssetLedger = {
+      id: "novo",
+      name: "ETF recém-criado",
+      category: "ETFs",
+      currency: "EUR",
+      transactions: [{ type: "BUY", date: new Date("2026-02-01"), amount: 1000 }],
+      snapshots: [],
+      livePrice: null,
+    };
+    const comValor: AssetLedger = {
+      id: "antigo",
+      name: "Depósito",
+      category: "Depósitos",
+      currency: "EUR",
+      transactions: [{ type: "DEPOSIT", date: new Date("2025-01-01"), amount: 500 }],
+      snapshots: [
+        { date: new Date("2025-12-31"), value: 500 },
+        { date: new Date("2026-08-01"), value: 520 },
+      ],
+    };
+    const ytd = computeYtd([semValor, comValor], new Date("2026-08-01"));
+    expect(ytd.ativosSemValorFinal).toBe(1);
+    // Só o ativo "comValor" entra — nem o cost basis nem os fluxos do "semValor".
+    expect(ytd.startValue).toBe(500);
+    expect(ytd.endValue).toBe(520);
+    expect(ytd.gainAmount).toBe(20);
+    expect(ytd.gainPercent).toBeCloseTo(0.04);
+  });
+
+  it("usa a cotação ao vivo (livePrice × unidades) como V_end quando disponível", () => {
+    const asset: AssetLedger = {
+      id: "a1",
+      name: "Bitcoin",
+      category: "Cripto",
+      currency: "EUR",
+      transactions: [{ type: "BUY", date: new Date("2025-06-01"), amount: 1000, quantity: 1 }],
+      snapshots: [{ date: new Date("2025-12-31"), value: 1000 }],
+      livePrice: 1300,
+    };
+    const ytd = computeYtd([asset], new Date("2026-08-01"));
+    expect(ytd.endValue).toBe(1300); // 1300 × 1 unidade, não o snapshot antigo
+    expect(ytd.gainAmount).toBe(300);
+    expect(ytd.ativosSemValorFinal).toBe(0);
+  });
 });
 
 describe("computeAllocation", () => {
@@ -297,5 +351,64 @@ describe("computeAssetPerformance", () => {
     ];
     const performance = computeAssetPerformance(assets);
     expect(performance.map((p) => p.id)).toEqual(["melhor", "pior", "sem-valorizacao"]);
+  });
+});
+
+function performanceRow(over: Partial<AssetPerformanceRow>): AssetPerformanceRow {
+  return {
+    id: "a",
+    name: "Ativo",
+    category: "X",
+    currency: "EUR",
+    netInvested: 100,
+    currentValue: 110,
+    currentValueSource: "manual",
+    unrealizedPL: 10,
+    unrealizedPLPercent: 0.1,
+    incomeReceived: 0,
+    totalReturn: 10,
+    totalReturnPercent: 0.1,
+    ...over,
+  };
+}
+
+describe("computePortfolioTotals", () => {
+  it("soma normalmente quando todos os ativos têm valor conhecido", () => {
+    const totals = computePortfolioTotals([
+      performanceRow({ id: "a1", netInvested: 100, currentValue: 120, incomeReceived: 5 }),
+      performanceRow({ id: "a2", netInvested: 200, currentValue: 210, incomeReceived: 0 }),
+    ]);
+    expect(totals.totalValue).toBe(330);
+    expect(totals.investedComValorConhecido).toBe(300);
+    expect(totals.totalIncome).toBe(5);
+    expect(totals.sinceInceptionGain).toBe(35); // (330 - 300) + 5
+    expect(totals.ativosSemValor).toBe(0);
+  });
+
+  it("ativo sem valor conhecido fica de fora de totalValue/ganho — não conta como 'vale 0'", () => {
+    // Regressão real: antes disto, um ativo currentValue=null contribuía 0
+    // para totalValue mas o seu netInvested continuava a entrar no total
+    // investido usado no ganho — fazia "Ganho desde o início" aparecer
+    // quase igual a "-Total investido" assim que um ativo era criado sem
+    // ainda ter cotação/valorização nenhuma, como se tivesse perdido tudo.
+    const totals = computePortfolioTotals([
+      performanceRow({ id: "com-valor", netInvested: 300, currentValue: 330, incomeReceived: 10 }),
+      performanceRow({
+        id: "sem-valor",
+        netInvested: 1000,
+        currentValue: null,
+        currentValueSource: null,
+        unrealizedPL: null,
+        unrealizedPLPercent: null,
+        totalReturn: null,
+        totalReturnPercent: null,
+        incomeReceived: 0,
+      }),
+    ]);
+    expect(totals.ativosSemValor).toBe(1);
+    expect(totals.totalValue).toBe(330); // só o ativo com valor conhecido
+    expect(totals.investedComValorConhecido).toBe(300); // não os 1000 do ativo sem valor
+    expect(totals.sinceInceptionGain).toBe(40); // (330-300)+10 — nunca -1000 e picos
+    expect(totals.totalIncome).toBe(10); // rendimento é sempre um facto conhecido
   });
 });

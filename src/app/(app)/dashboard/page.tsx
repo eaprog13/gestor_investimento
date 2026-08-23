@@ -73,6 +73,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {data.ativosSemValor > 0 ? (
+        <div className="rounded-xl border border-[var(--delta-bad)]/30 bg-[var(--delta-bad)]/10 px-4 py-3 text-sm text-[var(--text-primary)]">
+          <span className="font-medium">
+            {data.ativosSemValor} ativo{data.ativosSemValor > 1 ? "s" : ""} sem valor atual conhecido
+          </span>{" "}
+          — totais parciais (Valor total, Ganho) até teres uma cotação ao vivo ou uma valorização manual para{" "}
+          {data.ativosSemValor > 1 ? "eles" : "ele"}. Confirma em cada ativo se a cotação automática está a
+          funcionar (Editar → Cotação automática), ou adiciona uma valorização manual.
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           label="Valor total"

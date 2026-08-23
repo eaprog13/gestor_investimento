@@ -7,9 +7,9 @@ import {
   computeAssetPerformance,
   computeAllocation,
   computePortfolioTimeSeries,
+  computePortfolioTotals,
   computeTrendContext,
   computeYtd,
-  incomeReceived,
   netInvested,
   netQuantity,
   type AssetLedger,
@@ -183,13 +183,13 @@ export async function getDashboardData() {
     })
   );
 
+  // "Total investido" é sempre a soma real de TODOS os ativos — ao
+  // contrário de totalValue/sinceInceptionGain (computePortfolioTotals),
+  // não depende de sabermos o valor atual de cada um.
   const totalInvested = ledgers.reduce((sum, a) => sum + netInvested(a.transactions, asOf), 0);
   const performance = computeAssetPerformance(ledgers, asOf);
-  const totalValue = performance.reduce((sum, row) => sum + (row.currentValue ?? 0), 0);
-  const totalIncome = ledgers.reduce((sum, a) => sum + incomeReceived(a.transactions, asOf), 0);
-
-  const sinceInceptionGain = totalValue - totalInvested + totalIncome;
-  const sinceInceptionGainPercent = totalInvested > 0 ? sinceInceptionGain / totalInvested : null;
+  const totals = computePortfolioTotals(performance);
+  const { totalValue, sinceInceptionGain, sinceInceptionGainPercent, totalIncome, ativosSemValor } = totals;
 
   const ytd = computeYtd(ledgers, asOf);
   const allocation = computeAllocation(
@@ -223,6 +223,14 @@ export async function getDashboardData() {
       ytdIncome: ytd.income,
       totalIncome,
     },
+    // Ativos sem valor atual conhecido (sem cotação ao vivo bem-sucedida
+    // nem valorização manual) — computePortfolioTotals/computeYtd
+    // deixam-nos de fora de totalValue/sinceInceptionGain/ytdGain em vez
+    // de os tratar como "valem 0"; isto avisa a UI que os totais são
+    // parciais enquanto isso for verdade. O maior dos dois porque cada
+    // cálculo pode excluir um conjunto ligeiramente diferente (YTD também
+    // exige um V_start).
+    ativosSemValor: Math.max(ativosSemValor, ytd.ativosSemValorFinal),
     trends: {
       totalValue: timeSeries.map((p) => p.value),
       totalInvested: timeSeries.map((p) => p.invested),
