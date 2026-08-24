@@ -11,6 +11,15 @@ export type Profile = {
 /** "coingecko" (cripto) ou "alphavantage" (ETF/ações) — ver src/lib/quotes.ts. */
 export type PriceProvider = "coingecko" | "alphavantage";
 
+/**
+ * Rótulo independente da categoria — "aqui mora o fundo de emergência/a
+ * poupança", mesmo que o ativo esteja categorizado como outra coisa (ex.:
+ * um Certificado de Aforro que na prática É o fundo de emergência). Só
+ * afeta leitura (ver getPoderDeCompra em src/lib/data.ts) — nunca cria
+ * valor novo nem duplica o que já lá estava.
+ */
+export type AssetPurpose = "emergency_fund" | "savings";
+
 export type Asset = {
   id: string;
   name: string;
@@ -22,6 +31,7 @@ export type Asset = {
   priceProvider: PriceProvider | null;
   /** Símbolo no fornecedor: id da CoinGecko (ex. "bitcoin") ou ticker da Alpha Vantage (ex. "VWCE.DEX", "AAPL"). */
   priceSymbol: string | null;
+  purpose: AssetPurpose | null;
   createdAt: Date;
   updatedAt: Date;
 };

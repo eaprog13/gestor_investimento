@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularPoderDeCompra,
+  ehRelevanteParaPoderDeCompra,
   estimarErosaoPeriodica,
   indiceNaData,
   taxaAnualAtual,
@@ -136,5 +137,27 @@ describe("estimarErosaoPeriodica", () => {
     const erosaoDiaValorDobrado = estimarErosaoPeriodica(2000, 0.03, "day");
     expect(erosaoDia).toBeGreaterThan(0);
     expect(erosaoDiaValorDobrado).toBeCloseTo(erosaoDia * 2);
+  });
+});
+
+describe("ehRelevanteParaPoderDeCompra", () => {
+  it("entra pela categoria (normalizada — maiúsculas/espaços não importam)", () => {
+    expect(ehRelevanteParaPoderDeCompra({ category: "Poupanças", purpose: null })).toBe(true);
+    expect(ehRelevanteParaPoderDeCompra({ category: " fundo de emergência ", purpose: null })).toBe(true);
+    expect(ehRelevanteParaPoderDeCompra({ category: "Ações", purpose: null })).toBe(false);
+  });
+
+  it("entra pela etiqueta 'purpose', mesmo com uma categoria totalmente diferente", () => {
+    // Regressão do pedido real: um Certificado de Aforro (categoria
+    // própria) onde o dinheiro do fundo de emergência está, na prática,
+    // aplicado — sem recategorizar o ativo nem duplicar valor nenhum.
+    expect(ehRelevanteParaPoderDeCompra({ category: "Certificados de Aforro", purpose: "emergency_fund" })).toBe(
+      true
+    );
+    expect(ehRelevanteParaPoderDeCompra({ category: "Depósitos", purpose: "savings" })).toBe(true);
+  });
+
+  it("nem categoria nem etiqueta: fica de fora", () => {
+    expect(ehRelevanteParaPoderDeCompra({ category: "Ações", purpose: null })).toBe(false);
   });
 });

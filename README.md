@@ -161,7 +161,17 @@ compra); negativa = cresceu menos, mesmo que o valor nominal tenha subido.
 **Alargar a outras categorias:** por agora só "Poupanças"/"Fundo de
 Emergência" (pedido explícito, para validar o KPI primeiro nestas duas) —
 alargar é mudar uma lista (`CATEGORIAS_PODER_DE_COMPRA` em
-`src/lib/data.ts`), o resto da função já não depende da categoria.
+`src/lib/inflation.ts`), o resto da função já não depende da categoria.
+
+**Quando o dinheiro está aplicado noutra coisa** (ex: o fundo de
+emergência guardado num Certificado de Aforro, categoria própria) — editar
+esse ativo e marcar o campo **"Finalidade"** como "É o fundo de
+emergência"/"É poupança", sem mudar a categoria nem criar um ativo novo.
+É uma etiqueta independente da categoria (coluna `purpose`,
+`src/core/types.ts`): um ativo entra no KPI pela categoria OU pela
+etiqueta (`ehRelevanteParaPoderDeCompra` em `src/lib/inflation.ts`), nunca
+pelas duas ao mesmo tempo a somar — não duplica valor nenhum, é a mesma
+linha de sempre só com uma leitura extra.
 
 ## Segurança
 

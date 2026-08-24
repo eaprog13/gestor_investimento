@@ -3,6 +3,7 @@ import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import type { PoderDeCompraResultado } from "@/lib/data";
 
 const LABEL_PERIODO = { day: "dia", week: "semana", month: "mês", year: "ano" } as const;
+const LABEL_PURPOSE = { emergency_fund: "Fundo de emergência", savings: "Poupança" } as const;
 
 function LinhaErosao({ erosao, currency }: { erosao: Record<string, number>; currency: string }) {
   return (
@@ -23,8 +24,9 @@ export function PoderDeCompraCard({ dados }: { dados: PoderDeCompraResultado }) 
   if (dados.ativos.length === 0) {
     return (
       <p className="text-sm text-[var(--text-muted)]">
-        Sem ativos em &quot;Poupanças&quot; ou &quot;Fundo de Emergência&quot; ainda — cria um ou edita a categoria
-        de um existente para veres aqui a comparação com a inflação.
+        Sem ativos em &quot;Poupanças&quot; ou &quot;Fundo de Emergência&quot; ainda. Cria um ou edita a categoria de
+        um existente — ou, se esse dinheiro estiver aplicado noutra coisa (ex: Certificados de Aforro), edita esse
+        ativo e marca a &quot;Finalidade&quot; como fundo de emergência/poupança, sem mudar a categoria.
       </p>
     );
   }
@@ -51,7 +53,14 @@ export function PoderDeCompraCard({ dados }: { dados: PoderDeCompraResultado }) 
             <Link href={`/assets/${ativo.assetId}`} className="font-medium text-[var(--text-primary)] hover:underline">
               {ativo.assetName}
             </Link>
-            <span className="text-xs text-[var(--text-muted)]">{ativo.category}</span>
+            <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+              {ativo.category}
+              {ativo.purpose && (
+                <span className="rounded-full bg-[var(--series-1)]/15 px-2 py-0.5 text-[var(--series-1)]">
+                  {LABEL_PURPOSE[ativo.purpose]}
+                </span>
+              )}
+            </span>
           </div>
 
           {ativo.poderDeCompra ? (

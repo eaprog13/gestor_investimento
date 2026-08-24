@@ -19,6 +19,7 @@ import {
 import { formatTrendContext } from "@/lib/format";
 import {
   calcularPoderDeCompra,
+  ehRelevanteParaPoderDeCompra,
   estimarErosaoPeriodica,
   indiceNaData,
   taxaAnualAtual,
@@ -286,17 +287,12 @@ export async function getUsers() {
   return obterContentor().perfis.listar();
 }
 
-// Comparação por categoria normalizada (trim + minúsculas) — texto livre
-// no formulário (ver AssetForm.tsx), não um enum, por isso "Poupanças "
-// ou "poupanças" também tem de contar. Começa só com estas duas —
-// alargar esta lista (ou passar a incluir todas as categorias) é como se
-// estende o mesmo KPI aos restantes ativos, sem mexer no resto da função.
-const CATEGORIAS_PODER_DE_COMPRA = ["poupanças", "fundo de emergência"];
-
 export type PoderDeCompraAtivo = {
   assetId: string;
   assetName: string;
   category: string;
+  /** Só preenchido quando o ativo entrou por causa da etiqueta, não da categoria — ver ehRelevanteParaPoderDeCompra. */
+  purpose: "emergency_fund" | "savings" | null;
   currency: string;
   valorInvestido: number;
   /** Valor atual real (valorização/cotação) — null se nunca foi valorizado. */
@@ -329,9 +325,7 @@ export async function getPoderDeCompra(): Promise<PoderDeCompraResultado> {
     dependencias.inflacao.obterSerieIndice(),
   ]);
 
-  const relevantes = assets.filter((asset) =>
-    CATEGORIAS_PODER_DE_COMPRA.includes(asset.category.trim().toLowerCase())
-  );
+  const relevantes = assets.filter(ehRelevanteParaPoderDeCompra);
   const taxaAnual = taxaAnualAtual(serieIndice);
   const indiceAtual = indiceNaData(serieIndice, asOf);
 
@@ -374,6 +368,7 @@ export async function getPoderDeCompra(): Promise<PoderDeCompraResultado> {
         assetId: asset.id,
         assetName: asset.name,
         category: asset.category,
+        purpose: asset.purpose,
         currency: asset.currency,
         valorInvestido: financials.netInvested,
         valorAtual: financials.currentValue,

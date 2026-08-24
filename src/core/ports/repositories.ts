@@ -6,6 +6,7 @@
 
 import type {
   Asset,
+  AssetPurpose,
   PriceProvider,
   Profile,
   Transaction,
@@ -26,6 +27,7 @@ export type NewAsset = {
   notes?: string;
   priceProvider?: PriceProvider | null;
   priceSymbol?: string | null;
+  purpose?: AssetPurpose | null;
 };
 
 export interface RepositorioAtivo {

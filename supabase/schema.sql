@@ -34,6 +34,14 @@ comment on table public.profiles is 'Dados complementares de cada membro da fam�
 -- depósitos, imóveis, etc. não têm cotação nenhuma para obter (o valor não
 -- vem de um preço de mercado) e ficam sempre a null, por valorização
 -- manual, como até agora.
+-- "purpose": rótulo independente da categoria — um Certificado de Aforro
+-- continua categorizado como tal (é o que é), mas pode ser marcado como
+-- "aqui mora o fundo de emergência", para o KPI de poder de compra (ver
+-- src/lib/data.ts) o apanhar sem duplicar valor nenhum: não cria um
+-- ativo novo, não soma nada a mais, só empresta uma leitura extra ao
+-- mesmo dinheiro que já lá estava. Pedido explícito: "enquanto é
+-- aplicado ter uma nota de leitura que é fundo de emergência ou
+-- poupança, sem adicionar o valor a mais".
 create table if not exists public.assets (
   id             uuid primary key default gen_random_uuid(),
   name           text not null,
@@ -43,14 +51,16 @@ create table if not exists public.assets (
   is_archived    boolean not null default false,
   price_provider text check (price_provider in ('coingecko', 'alphavantage')),
   price_symbol   text,
+  purpose        text check (purpose in ('emergency_fund', 'savings')),
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
 
 -- Idempotente: quem já tinha a tabela criada antes de "price_provider"/
--- "price_symbol" existirem só precisa de voltar a correr este ficheiro.
+-- "price_symbol"/"purpose" existirem só precisa de voltar a correr este ficheiro.
 alter table public.assets add column if not exists price_provider text check (price_provider in ('coingecko', 'alphavantage'));
 alter table public.assets add column if not exists price_symbol text;
+alter table public.assets add column if not exists purpose text check (purpose in ('emergency_fund', 'savings'));
 
 create index if not exists assets_category_idx on public.assets (category);
 

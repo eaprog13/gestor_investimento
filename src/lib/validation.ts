@@ -52,6 +52,9 @@ export const newPasswordSchema = z
 /** Ver src/adapters/quotes/httpQuoteProvider.ts — fornecedores de cotação ao vivo suportados. */
 export const PRICE_PROVIDERS = ["coingecko", "alphavantage"] as const;
 
+/** Ver core/types.ts, AssetPurpose. */
+export const ASSET_PURPOSES = ["emergency_fund", "savings"] as const;
+
 export const assetSchema = z
   .object({
     name: z.string().trim().min(1, "Indica um nome.").max(120),
@@ -76,6 +79,13 @@ export const assetSchema = z
       .max(30)
       .optional()
       .transform((v) => (v && v.trim().length > 0 ? v.trim() : null)),
+    // Rótulo independente da categoria — "isto é o fundo de emergência/a
+    // poupança", mesmo que o ativo seja, por exemplo, um Certificado de
+    // Aforro (categoria própria). Ver core/types.ts, AssetPurpose.
+    purpose: z
+      .string()
+      .optional()
+      .transform((v) => (v === "emergency_fund" || v === "savings" ? v : null)),
   })
   .refine((data) => !data.priceProvider || !!data.priceSymbol, {
     error: "Indica o símbolo para a cotação automática (ex: bitcoin, ou AAPL).",

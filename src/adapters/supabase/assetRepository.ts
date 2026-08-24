@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositorioAtivo, NewAsset, AssetWithLedger } from "@/core/ports/repositories";
-import type { Asset, PriceProvider } from "@/core/types";
+import type { Asset, AssetPurpose, PriceProvider } from "@/core/types";
 import { paraTransacao, type LinhaTransacao } from "@/adapters/supabase/transactionRow";
 import { paraValorizacao, type LinhaValorizacao } from "@/adapters/supabase/valuationRow";
 
@@ -14,6 +14,7 @@ type LinhaAtivo = {
   is_archived: boolean;
   price_provider: string | null;
   price_symbol: string | null;
+  purpose: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -33,6 +34,7 @@ function paraAtivo(linha: LinhaAtivo): Asset {
     isArchived: linha.is_archived,
     priceProvider: (linha.price_provider as PriceProvider | null) ?? null,
     priceSymbol: linha.price_symbol,
+    purpose: (linha.purpose as AssetPurpose | null) ?? null,
     createdAt: new Date(linha.created_at),
     updatedAt: new Date(linha.updated_at),
   };
@@ -94,6 +96,7 @@ export class RepositorioAtivoSupabase implements RepositorioAtivo {
         notes: dados.notes ?? null,
         price_provider: dados.priceProvider ?? null,
         price_symbol: dados.priceSymbol ?? null,
+        purpose: dados.purpose ?? null,
       })
       .select("*")
       .single();
@@ -111,6 +114,7 @@ export class RepositorioAtivoSupabase implements RepositorioAtivo {
         notes: dados.notes ?? null,
         price_provider: dados.priceProvider ?? null,
         price_symbol: dados.priceSymbol ?? null,
+        purpose: dados.purpose ?? null,
       })
       .eq("id", id)
       .select("*")

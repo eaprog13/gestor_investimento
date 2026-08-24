@@ -29,6 +29,7 @@ type AssetFormProps = {
     notes: string | null;
     priceProvider?: "coingecko" | "alphavantage" | null;
     priceSymbol?: string | null;
+    purpose?: "emergency_fund" | "savings" | null;
   };
 };
 
@@ -133,6 +134,29 @@ export function AssetForm({ action, submitLabel, defaultValues }: AssetFormProps
           <code className="rounded bg-[var(--background)] px-1">binancecoin</code> (não &quot;BNB&quot;); confirma em
           coingecko.com/pt/moedas/&lt;nome&gt; — o id está no URL. Certificados de Aforro, depósitos e imóveis não
           têm cotação de mercado — continuam a usar valorizações manuais.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+        <label htmlFor="purpose" className="text-sm font-medium text-[var(--text-primary)]">
+          Finalidade <span className="font-normal text-[var(--text-muted)]">(opcional)</span>
+        </label>
+        <select
+          id="purpose"
+          name="purpose"
+          defaultValue={defaultValues?.purpose ?? ""}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
+        >
+          <option value="">Nenhuma</option>
+          <option value="emergency_fund">É o fundo de emergência</option>
+          <option value="savings">É poupança</option>
+        </select>
+        <p className="text-xs text-[var(--text-muted)]">
+          Independente da categoria — marca este ativo como sendo (ou albergando) o fundo de emergência ou a
+          poupança, mesmo que a categoria seja outra (ex: um Certificado de Aforro onde na prática guardas o fundo
+          de emergência). Só afeta o KPI de{" "}
+          <strong className="text-[var(--text-secondary)]">poder de compra</strong> no dashboard — nunca cria valor
+          novo nem duplica nada, é só uma etiqueta sobre o mesmo dinheiro que já cá está.
         </p>
       </div>
 
