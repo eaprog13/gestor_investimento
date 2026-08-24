@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { getDashboardData } from "@/lib/data";
+import { getDashboardData, getPoderDeCompra } from "@/lib/data";
 import { KpiCard } from "@/components/KpiCard";
 import { AllocationDonutChart } from "@/components/AllocationDonutChart";
 import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 import { AssetPerformanceTable } from "@/components/AssetPerformanceTable";
 import { RecentTransactionsList } from "@/components/RecentTransactionsList";
+import { PoderDeCompraCard } from "@/components/PoderDeCompraCard";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,17 @@ export default async function DashboardPage() {
   }
 
   const { kpis, trends, context, bestPerformer } = data;
+
+  let poderDeCompra;
+  try {
+    poderDeCompra = await getPoderDeCompra();
+  } catch (erro) {
+    // A API do BPstat já nunca lança (ver bpstatInflationProvider.ts) —
+    // isto só apanha uma falha genuína a ler os ativos, que não deve
+    // derrubar o resto do dashboard por causa de um cartão só.
+    console.error("[dashboard] falha a calcular o poder de compra:", erro);
+    poderDeCompra = { ativos: [], taxaAnualInflacao: null, dataUltimoIndice: null };
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -201,6 +213,10 @@ export default async function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      <Card title="Poder de compra (Poupanças / Fundo de Emergência)" atraso={560}>
+        <PoderDeCompraCard dados={poderDeCompra} />
+      </Card>
     </div>
   );
 }

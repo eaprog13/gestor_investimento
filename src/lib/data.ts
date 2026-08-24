@@ -17,6 +17,14 @@ import {
   type TxLite,
 } from "@/lib/calculations";
 import { formatTrendContext } from "@/lib/format";
+import {
+  calcularPoderDeCompra,
+  estimarErosaoPeriodica,
+  indiceNaData,
+  taxaAnualAtual,
+  type PeriodoInflacao,
+  type PoderDeCompra,
+} from "@/lib/inflation";
 
 function toLedger(
   asset: {
@@ -259,4 +267,109 @@ export async function getDashboardData() {
 
 export async function getUsers() {
   return obterContentor().perfis.listar();
+}
+
+// Comparação por categoria normalizada (trim + minúsculas) — texto livre
+// no formulário (ver AssetForm.tsx), não um enum, por isso "Poupanças "
+// ou "poupanças" também tem de contar. Começa só com estas duas —
+// alargar esta lista (ou passar a incluir todas as categorias) é como se
+// estende o mesmo KPI aos restantes ativos, sem mexer no resto da função.
+const CATEGORIAS_PODER_DE_COMPRA = ["poupanças", "fundo de emergência"];
+
+export type PoderDeCompraAtivo = {
+  assetId: string;
+  assetName: string;
+  category: string;
+  currency: string;
+  valorInvestido: number;
+  /** Valor atual real (valorização/cotação) — null se nunca foi valorizado. */
+  valorAtual: number | null;
+  /** "valorizado" usa valorAtual real; "estimado" cai no valor investido (sem nenhuma valorização, assume-se que o dinheiro ficou parado — ver getPoderDeCompra). */
+  origemValorAtual: "valorizado" | "estimado";
+  poderDeCompra: PoderDeCompra | null;
+  /** Erosão estimada por período, ao ritmo da inflação atual, presumindo o valor parado — ver estimarErosaoPeriodica (é uma projeção, não uma medição). null sem taxa de inflação conhecida. */
+  erosaoPorPeriodo: Record<PeriodoInflacao, number> | null;
+};
+
+export type PoderDeCompraResultado = {
+  ativos: PoderDeCompraAtivo[];
+  taxaAnualInflacao: number | null;
+  dataUltimoIndice: Date | null;
+};
+
+/**
+ * KPI de poder de compra: compara o que foi investido em ativos de
+ * "Poupanças"/"Fundo de Emergência" com o que seria preciso ter hoje só
+ * para acompanhar a inflação (ver core/services e src/lib/inflation.ts
+ * para a matemática, README para a explicação completa).
+ */
+export async function getPoderDeCompra(): Promise<PoderDeCompraResultado> {
+  const dependencias = obterContentor();
+  const asOf = new Date();
+
+  const [assets, serieIndice] = await Promise.all([
+    dependencias.ativos.listar({ incluirArquivados: false }),
+    dependencias.inflacao.obterSerieIndice(),
+  ]);
+
+  const relevantes = assets.filter((asset) =>
+    CATEGORIAS_PODER_DE_COMPRA.includes(asset.category.trim().toLowerCase())
+  );
+  const taxaAnual = taxaAnualAtual(serieIndice);
+  const indiceAtual = indiceNaData(serieIndice, asOf);
+
+  const ativos = await Promise.all(
+    relevantes.map(async (asset): Promise<PoderDeCompraAtivo> => {
+      const { liveValue } = await precoEValorAoVivo(asset, asOf);
+      const financials = computeAssetFinancials(asset.transactions, asset.valuations, asOf, liveValue);
+
+      // Sem nenhuma valorização/cotação, o valor "atual" mais honesto que
+      // se pode assumir é o que foi investido (dinheiro parado, sem juro
+      // registado) — isto é o próprio ponto do KPI: mesmo "parado", a
+      // inflação já corroeu poder de compra, e é exatamente isso que se
+      // quer mostrar em vez de esconder o ativo por falta de valorização.
+      const valorAtualEstimado = financials.currentValue ?? financials.netInvested;
+
+      const primeiraTransacao = asset.transactions.reduce<Date | null>(
+        (maisAntiga, tx) => (maisAntiga === null || tx.date.getTime() < maisAntiga.getTime() ? tx.date : maisAntiga),
+        null
+      );
+      const indiceNoInvestimento = primeiraTransacao ? indiceNaData(serieIndice, primeiraTransacao) : null;
+
+      const poderDeCompra = calcularPoderDeCompra({
+        valorInvestido: financials.netInvested,
+        valorAtual: valorAtualEstimado,
+        indiceNoInvestimento,
+        indiceAtual,
+      });
+
+      const erosaoPorPeriodo: Record<PeriodoInflacao, number> | null =
+        taxaAnual !== null
+          ? {
+              day: estimarErosaoPeriodica(valorAtualEstimado, taxaAnual, "day"),
+              week: estimarErosaoPeriodica(valorAtualEstimado, taxaAnual, "week"),
+              month: estimarErosaoPeriodica(valorAtualEstimado, taxaAnual, "month"),
+              year: estimarErosaoPeriodica(valorAtualEstimado, taxaAnual, "year"),
+            }
+          : null;
+
+      return {
+        assetId: asset.id,
+        assetName: asset.name,
+        category: asset.category,
+        currency: asset.currency,
+        valorInvestido: financials.netInvested,
+        valorAtual: financials.currentValue,
+        origemValorAtual: financials.currentValue !== null ? "valorizado" : "estimado",
+        poderDeCompra,
+        erosaoPorPeriodo,
+      };
+    })
+  );
+
+  return {
+    ativos,
+    taxaAnualInflacao: taxaAnual,
+    dataUltimoIndice: serieIndice.length > 0 ? serieIndice[serieIndice.length - 1]!.date : null,
+  };
 }

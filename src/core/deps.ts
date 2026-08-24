@@ -6,6 +6,7 @@ import type {
   RepositorioValorizacao,
 } from "@/core/ports/repositories";
 import type { FornecedorGestaoIdentidade } from "@/core/ports/identity";
+import type { RepositorioInflacao } from "@/core/ports/inflation";
 
 /** Forma do contentor de dependências — ver src/composition/container.ts. */
 export type Dependencias = {
@@ -14,5 +15,6 @@ export type Dependencias = {
   transacoes: RepositorioTransacao;
   valorizacoes: RepositorioValorizacao;
   cotacoes: RepositorioCotacoes;
+  inflacao: RepositorioInflacao;
   identidade: FornecedorGestaoIdentidade;
 };

@@ -71,6 +71,7 @@ export function AssetForm({ action, submitLabel, defaultValues }: AssetFormProps
           <option value="Imóveis" />
           <option value="Depósitos" />
           <option value="Poupanças" />
+          <option value="Fundo de Emergência" />
           <option value="Fundos" />
           <option value="Obrigações" />
         </datalist>

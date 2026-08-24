@@ -121,6 +121,48 @@ pedido de "valores diários". Sem `ALPHA_VANTAGE_API_KEY` definida, ativos
 ligados à Alpha Vantage ficam silenciosamente sem cotação (fallback para
 valorização manual) — ver `.env.example`.
 
+## Poder de compra (inflação)
+
+Cartão no dashboard ("Poder de compra") para ativos das categorias
+**"Poupanças"** e **"Fundo de Emergência"** — compara o que foi investido
+com o que seria preciso valer hoje só para acompanhar a inflação, e mostra
+uma estimativa do que a inflação corrói por dia/semana/mês/ano se o valor
+ficar parado.
+
+**Fonte de dados:** [BPstat](https://bpstat.bportugal.pt) (API pública do
+Banco de Portugal, sem chave nenhuma) — série "IPC (2012=100) total"
+([`src/adapters/bpstat/bpstatInflationProvider.ts`](src/adapters/bpstat/bpstatInflationProvider.ts)).
+A documentação pública da API (bpstat.bportugal.pt/data/docs) é uma SPA
+que não carrega sem JavaScript — o formato dos pedidos usado aqui foi
+confirmado ao vivo contra a própria API, não por suposição.
+
+**Só o ÍNDICE bruto é pedido, não uma "taxa de inflação" à parte** — a
+taxa homóloga (variação a 12 meses) e qualquer taxa acumulada entre duas
+datas quaisquer calculam-se a partir do índice (`src/lib/inflation.ts`),
+o que permite comparar o valor investido com a inflação acumulada
+EXATAMENTE desde a data da primeira transação de cada ativo, não só desde
+o último mês.
+
+**Sobre "diário/semanal/mensal"** — a inflação só é publicada
+mensalmente (não existe uma "inflação diária" publicada em lado nenhum,
+nem pelo INE nem pelo Banco de Portugal). Os valores por dia/semana/mês
+mostrados no cartão são uma **projeção matemática** a partir da taxa
+anual real (juro composto, `taxaEquivalentePeriodo` em
+`src/lib/inflation.ts`) — o cartão deixa isto explícito na interface, não
+é dados diários genuínos.
+
+**Matemática** (equação de Fisher, `calcularPoderDeCompra`):
+```
+taxaReal = (1 + taxaNominal) / (1 + taxaInflaçãoAcumulada) − 1
+```
+Positiva = o valor cresceu mais do que a inflação (ganhaste poder de
+compra); negativa = cresceu menos, mesmo que o valor nominal tenha subido.
+
+**Alargar a outras categorias:** por agora só "Poupanças"/"Fundo de
+Emergência" (pedido explícito, para validar o KPI primeiro nestas duas) —
+alargar é mudar uma lista (`CATEGORIAS_PODER_DE_COMPRA` em
+`src/lib/data.ts`), o resto da função já não depende da categoria.
+
 ## Segurança
 
 - **Cabeçalhos HTTP** (`src/lib/security/headers.ts`, aplicados em
