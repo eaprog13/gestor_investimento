@@ -125,6 +125,21 @@ async function precoEValorAoVivo(
   return { livePrice, liveValue };
 }
 
+// Formato genérico de UUID (8-4-4-4-12 hex), não específico da v4 —
+// aceita o que o próprio Postgres aceitaria numa coluna "uuid". Um id
+// vindo da URL (ex.: /assets/qualquer-coisa) que não bata com isto nunca
+// existe na base de dados — mas SEM esta verificação, "qualquer-coisa"
+// ainda seguia até ao Supabase, que rejeita com "invalid input syntax for
+// type uuid" (um erro do Postgres, não "não encontrado"): a exceção
+// propagava por getAsset/getTransaction acima (nenhum tem try/catch) e a
+// página caía na página de erro genérica do Next em vez de simplesmente
+// 404 — apanhado ao verificar como a app reage a IDs inválidos na URL.
+const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function ehUuid(valor: string): boolean {
+  return REGEX_UUID.test(valor);
+}
+
 export async function getAssets(options: { includeArchived?: boolean } = {}) {
   const assets = await obterContentor().ativos.listar({ incluirArquivados: options.includeArchived });
   const asOf = new Date();
@@ -142,6 +157,7 @@ export async function getAssets(options: { includeArchived?: boolean } = {}) {
 }
 
 export async function getAsset(id: string) {
+  if (!ehUuid(id)) return null;
   const asset = await obterContentor().ativos.obterPorId(id);
   if (!asset) return null;
 
@@ -172,6 +188,7 @@ export async function getTransactions(filters: TransactionFilters = {}) {
 }
 
 export async function getTransaction(id: string) {
+  if (!ehUuid(id)) return null;
   return obterContentor().transacoes.obterPorId(id);
 }
 

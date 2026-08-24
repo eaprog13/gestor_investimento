@@ -89,12 +89,18 @@ describe("valuationSchema", () => {
 
 describe("userSchema", () => {
   it("rejeita password curta", () => {
-    const result = userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "1234567" });
+    const result = userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "Curta1A" });
     expect(result.success).toBe(false);
   });
 
+  it("rejeita password comprida mas sem variedade de caracteres (só dígitos, só minúsculas)", () => {
+    expect(userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "1234567890" }).success).toBe(false);
+    expect(userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "minusculas" }).success).toBe(false);
+    expect(userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "MAIUSCULAS" }).success).toBe(false);
+  });
+
   it("aceita dados válidos", () => {
-    const result = userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "12345678" });
+    const result = userSchema.safeParse({ name: "Ana", email: "ana@x.com", password: "Password123" });
     expect(result.success).toBe(true);
   });
 });

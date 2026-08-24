@@ -15,10 +15,24 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Indica a password."),
 });
 
+// Política reforçada (era só min(8), sem exigir nenhuma variedade de
+// caracteres) — alinhada com a mesma regra já usada no helpdesk_smartcreative
+// (ver src/app/api/auth/change-password/route.ts desse projeto): esta app
+// guarda dados financeiros da família toda, não faz sentido ter uma
+// política de password mais fraca do que um projeto B2B com dados menos
+// sensíveis.
+export const passwordSchema = z
+  .string()
+  .min(10, "A password tem de ter pelo menos 10 caracteres.")
+  .max(128)
+  .regex(/[A-Z]/, "Deve incluir pelo menos uma letra maiúscula.")
+  .regex(/[a-z]/, "Deve incluir pelo menos uma letra minúscula.")
+  .regex(/[0-9]/, "Deve incluir pelo menos um número.");
+
 export const userSchema = z.object({
   name: z.string().trim().min(2, "Nome demasiado curto.").max(80),
   email: z.string().trim().min(1, "Indica o email.").email("Email inválido."),
-  password: z.string().min(8, "A password tem de ter pelo menos 8 caracteres."),
+  password: passwordSchema,
 });
 
 export const updateUserSchema = z.object({
@@ -27,7 +41,7 @@ export const updateUserSchema = z.object({
 
 export const newPasswordSchema = z
   .object({
-    password: z.string().min(8, "A password tem de ter pelo menos 8 caracteres."),
+    password: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {

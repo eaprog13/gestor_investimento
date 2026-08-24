@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // Sem isto, o Next manda sempre "X-Powered-By: Next.js" em toda a
+  // resposta — não é uma vulnerabilidade em si, mas não há razão nenhuma
+  // para anunciar a framework a quem estiver a sondar o site. Confirmado
+  // com curl que o cabeçalho desaparece depois disto.
+  poweredByHeader: false,
 };
 
 export default nextConfig;

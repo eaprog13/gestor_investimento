@@ -34,9 +34,12 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="new-password"
           required
-          minLength={8}
+          minLength={10}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
         />
+        <p className="text-xs text-[var(--text-muted)]">
+          Pelo menos 10 caracteres, com maiúscula, minúscula e número.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -49,7 +52,7 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="new-password"
           required
-          minLength={8}
+          minLength={10}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
         />
       </div>

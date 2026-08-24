@@ -27,7 +27,7 @@ export async function login(_prevState: ActionState, formData: FormData): Promis
   }
 
   const ip = await obterIp();
-  const { sucesso } = await verificarLimiteLogin(`${parsed.data.email}:${ip}`);
+  const { sucesso } = await verificarLimiteLogin(parsed.data.email, `${parsed.data.email}:${ip}`);
   if (!sucesso) {
     return { status: "error", message: "Demasiadas tentativas. Tenta de novo daqui a um minuto." };
   }
