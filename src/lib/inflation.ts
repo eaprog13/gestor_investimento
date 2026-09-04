@@ -5,32 +5,8 @@
 // não o livro-razão do portefólio).
 
 import type { PontoIndiceInflacao } from "@/core/ports/inflation";
-import type { AssetPurpose } from "@/core/types";
 
 export type PeriodoInflacao = "day" | "week" | "month" | "year";
-
-// Comparação por categoria normalizada (trim + minúsculas) — texto livre
-// no formulário (ver AssetForm.tsx), não um enum, por isso "Poupanças " ou
-// "poupanças" também tem de contar. Alargar esta lista (ou passar a
-// incluir todas as categorias) é como se estende o mesmo KPI aos
-// restantes ativos, sem mexer no resto da lógica.
-const CATEGORIAS_PODER_DE_COMPRA = ["poupanças", "fundo de emergência"];
-
-/**
- * Um ativo entra no KPI de poder de compra por DUAS vias independentes:
- * a categoria bater com uma das de cima, OU o campo "purpose" (ver
- * core/types.ts, AssetPurpose) estar marcado — o segundo caso é para
- * quando o dinheiro do fundo de emergência/poupança está, na prática,
- * aplicado noutra coisa (ex.: um Certificado de Aforro, categoria
- * própria) e não faz sentido nenhum recategorizar o ativo nem duplicá-lo
- * só para aparecer aqui. Pedido explícito: "enquanto é aplicado ter uma
- * nota de leitura que é fundo de emergência ou poupança, sem adicionar o
- * valor a mais, caso contrário ir ter valores duplicados".
- */
-export function ehRelevanteParaPoderDeCompra(asset: { category: string; purpose: AssetPurpose | null }): boolean {
-  if (asset.purpose === "emergency_fund" || asset.purpose === "savings") return true;
-  return CATEGORIAS_PODER_DE_COMPRA.includes(asset.category.trim().toLowerCase());
-}
 
 // Meses usam a média de dias do ano (365/12), não "30" — evita que um mês
 // mais curto (fevereiro) pareça ter inflação equivalente mais alta só por

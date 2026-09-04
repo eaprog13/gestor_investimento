@@ -123,11 +123,11 @@ valorização manual) — ver `.env.example`.
 
 ## Poder de compra (inflação)
 
-Cartão no dashboard ("Poder de compra") para ativos das categorias
-**"Poupanças"** e **"Fundo de Emergência"** — compara o que foi investido
-com o que seria preciso valer hoje só para acompanhar a inflação, e mostra
-uma estimativa do que a inflação corrói por dia/semana/mês/ano se o valor
-ficar parado.
+Cartão no dashboard ("Poder de compra") para **todos os ativos** do
+portefólio (arquivados excluídos) — compara o que foi investido em cada
+um com o que seria preciso valer hoje só para acompanhar a inflação, e
+mostra uma estimativa do que a inflação corrói por dia/semana/mês/ano se
+o valor ficar parado.
 
 **Fonte de dados:** [BPstat](https://bpstat.bportugal.pt) (API pública do
 Banco de Portugal, sem chave nenhuma) — série "IPC (2012=100) total"
@@ -158,20 +158,17 @@ taxaReal = (1 + taxaNominal) / (1 + taxaInflaçãoAcumulada) − 1
 Positiva = o valor cresceu mais do que a inflação (ganhaste poder de
 compra); negativa = cresceu menos, mesmo que o valor nominal tenha subido.
 
-**Alargar a outras categorias:** por agora só "Poupanças"/"Fundo de
-Emergência" (pedido explícito, para validar o KPI primeiro nestas duas) —
-alargar é mudar uma lista (`CATEGORIAS_PODER_DE_COMPRA` em
-`src/lib/inflation.ts`), o resto da função já não depende da categoria.
+**Cobertura:** inicialmente só "Poupanças"/"Fundo de Emergência" (pedido
+explícito, para validar o KPI primeiro nestas duas categorias) — alargado
+depois, a pedido, a todos os ativos do portefólio.
 
-**Quando o dinheiro está aplicado noutra coisa** (ex: o fundo de
-emergência guardado num Certificado de Aforro, categoria própria) — editar
-esse ativo e marcar o campo **"Finalidade"** como "É o fundo de
-emergência"/"É poupança", sem mudar a categoria nem criar um ativo novo.
-É uma etiqueta independente da categoria (coluna `purpose`,
-`src/core/types.ts`): um ativo entra no KPI pela categoria OU pela
-etiqueta (`ehRelevanteParaPoderDeCompra` em `src/lib/inflation.ts`), nunca
-pelas duas ao mesmo tempo a somar — não duplica valor nenhum, é a mesma
-linha de sempre só com uma leitura extra.
+**Campo "Finalidade"** (coluna `purpose`, `src/core/types.ts`) — marca um
+ativo como sendo (ou albergando) o fundo de emergência/poupança
+independentemente da categoria (ex: o fundo de emergência guardado num
+Certificado de Aforro, categoria própria), só para mostrar o crachá no
+cartão. Não afeta a inclusão no KPI (que já cobre todos os ativos) nem
+duplica valor nenhum — é a mesma linha de sempre só com uma leitura
+extra.
 
 ## Segurança
 

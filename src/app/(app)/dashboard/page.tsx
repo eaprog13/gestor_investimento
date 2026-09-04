@@ -214,7 +214,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card title="Poder de compra (Poupanças / Fundo de Emergência)" atraso={560}>
+      <Card title="Poder de compra vs. inflação" atraso={560}>
         <PoderDeCompraCard dados={poderDeCompra} />
       </Card>
     </div>

@@ -19,7 +19,6 @@ import {
 import { formatTrendContext } from "@/lib/format";
 import {
   calcularPoderDeCompra,
-  ehRelevanteParaPoderDeCompra,
   estimarErosaoPeriodica,
   indiceNaData,
   taxaAnualAtual,
@@ -291,7 +290,7 @@ export type PoderDeCompraAtivo = {
   assetId: string;
   assetName: string;
   category: string;
-  /** Só preenchido quando o ativo entrou por causa da etiqueta, não da categoria — ver ehRelevanteParaPoderDeCompra. */
+  /** Etiqueta informativa (mostrada como badge) — já não determina a inclusão no KPI, que cobre todos os ativos. */
   purpose: "emergency_fund" | "savings" | null;
   currency: string;
   valorInvestido: number;
@@ -311,10 +310,11 @@ export type PoderDeCompraResultado = {
 };
 
 /**
- * KPI de poder de compra: compara o que foi investido em ativos de
- * "Poupanças"/"Fundo de Emergência" com o que seria preciso ter hoje só
- * para acompanhar a inflação (ver core/services e src/lib/inflation.ts
- * para a matemática, README para a explicação completa).
+ * KPI de poder de compra: compara o que foi investido em cada ativo (todo
+ * o portefólio, ativos arquivados excluídos) com o que seria preciso ter
+ * hoje só para acompanhar a inflação (ver core/services e
+ * src/lib/inflation.ts para a matemática, README para a explicação
+ * completa).
  */
 export async function getPoderDeCompra(): Promise<PoderDeCompraResultado> {
   const dependencias = obterContentor();
@@ -325,12 +325,11 @@ export async function getPoderDeCompra(): Promise<PoderDeCompraResultado> {
     dependencias.inflacao.obterSerieIndice(),
   ]);
 
-  const relevantes = assets.filter(ehRelevanteParaPoderDeCompra);
   const taxaAnual = taxaAnualAtual(serieIndice);
   const indiceAtual = indiceNaData(serieIndice, asOf);
 
   const ativos = await Promise.all(
-    relevantes.map(async (asset): Promise<PoderDeCompraAtivo> => {
+    assets.map(async (asset): Promise<PoderDeCompraAtivo> => {
       const { liveValue } = await precoEValorAoVivo(asset, asOf);
       const financials = computeAssetFinancials(asset.transactions, asset.valuations, asOf, liveValue);
 

@@ -22,13 +22,7 @@ function LinhaErosao({ erosao, currency }: { erosao: Record<string, number>; cur
 
 export function PoderDeCompraCard({ dados }: { dados: PoderDeCompraResultado }) {
   if (dados.ativos.length === 0) {
-    return (
-      <p className="text-sm text-[var(--text-muted)]">
-        Sem ativos em &quot;Poupanças&quot; ou &quot;Fundo de Emergência&quot; ainda. Cria um ou edita a categoria de
-        um existente — ou, se esse dinheiro estiver aplicado noutra coisa (ex: Certificados de Aforro), edita esse
-        ativo e marca a &quot;Finalidade&quot; como fundo de emergência/poupança, sem mudar a categoria.
-      </p>
-    );
+    return <p className="text-sm text-[var(--text-muted)]">Sem ativos ainda — cria um para começar a acompanhar.</p>;
   }
 
   return (
