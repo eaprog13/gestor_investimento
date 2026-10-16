@@ -65,7 +65,7 @@ async function obterPrecoCoinGecko(symbol: string, currency: string): Promise<nu
   await aguardarVezCoinGecko();
 
   const moeda = currency.toLowerCase();
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(symbol)}&vs_currencies=${moeda}`;
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(symbol)}&vs_currencies=${encodeURIComponent(moeda)}`;
 
   const resposta = await fetch(url, {
     next: { revalidate: REVALIDATE_SEGUNDOS },

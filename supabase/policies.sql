@@ -1,47 +1,44 @@
 -- ════════════════════════════════════════════════════════════════════════
--- Row Level Security — segunda linha de defesa a nível da base de dados,
--- independente da validação já feita nas Server Actions (defense in depth).
+-- Row Level Security — base de dados FECHADA às chaves públicas.
 --
--- Modelo de autorização desta app: livro-razão PARTILHADO por toda a
--- família — ao contrário do helpdesk (onde cada cliente só vê os seus
--- próprios tickets), aqui qualquer membro autenticado tem acesso total a
--- todos os ativos/transações/valorizações. A fronteira que importa é
--- "autenticado ou não", não "de quem é este registo" — por isso as policies
--- abaixo são "to authenticated using (true)", não scoped por utilizador.
+-- Esta app só lê e escreve dados no servidor, com a chave service_role (que
+-- ignora o RLS — ver src/lib/supabase/admin.ts e src/composition/container.ts).
+-- A chave anon é pública (vai no bundle do browser, para o "esqueci a
+-- password") e um utilizador "authenticated" pode ser QUALQUER conta do
+-- Supabase Auth — incluindo uma criada pelo signup público, se estiver
+-- ligado. Por isso:
+--   - RLS ligado em todas as tabelas (schema.sql) e NENHUMA policy para
+--     anon/authenticated: o PostgREST não devolve nem aceita nada com essas
+--     chaves (sem policy = tudo recusado);
+--   - sem privilégios de tabela para anon/authenticated (segunda barreira,
+--     caso alguém um dia crie uma policy por engano).
+-- Antes havia policies "to authenticated using (true)" (livro-razão
+-- partilhado): a app nunca as usou, e com o signup público ligado davam a
+-- qualquer desconhecido acesso total aos dados da família pela API REST.
 -- ════════════════════════════════════════════════════════════════════════
 
--- ── profiles ────────────────────────────────────────────────────────────
-create policy "profiles: utilizador vê o próprio perfil"
-  on public.profiles for select
-  to authenticated
-  using (id = auth.uid());
+-- ── Policies antigas (acesso total para "authenticated") ────────────────
+drop policy if exists "profiles: utilizador vê o próprio perfil" on public.profiles;
+drop policy if exists "profiles: utilizador atualiza o próprio perfil" on public.profiles;
+drop policy if exists "assets: membros autenticados têm acesso total" on public.assets;
+drop policy if exists "transactions: membros autenticados têm acesso total" on public.transactions;
+drop policy if exists "valuation_snapshots: membros autenticados têm acesso total" on public.valuation_snapshots;
 
-create policy "profiles: utilizador atualiza o próprio perfil"
-  on public.profiles for update
-  to authenticated
-  using (id = auth.uid())
-  with check (id = auth.uid());
+-- ── RLS ligado (já vem do schema.sql; repetido para este ficheiro bastar) ──
+alter table public.profiles            enable row level security;
+alter table public.assets              enable row level security;
+alter table public.transactions        enable row level security;
+alter table public.valuation_snapshots enable row level security;
 
--- Criação de novos membros é feita exclusivamente pela Admin API (chave
--- service_role, que ignora RLS — ver src/app/(app)/settings/users/actions.ts)
--- de propósito: não há policy de insert para "authenticated" aqui.
+-- ── Sem privilégios para as chaves públicas ─────────────────────────────
+revoke all on table public.profiles            from anon, authenticated;
+revoke all on table public.assets              from anon, authenticated;
+revoke all on table public.transactions        from anon, authenticated;
+revoke all on table public.valuation_snapshots from anon, authenticated;
 
--- ── assets / transactions / valuation_snapshots ────────────────────────
--- Livro-razão partilhado: qualquer membro autenticado lê e escreve tudo.
-create policy "assets: membros autenticados têm acesso total"
-  on public.assets for all
-  to authenticated
-  using (true)
-  with check (true);
+-- tabelas futuras neste esquema também nascem fechadas
+alter default privileges in schema public revoke all on tables from anon, authenticated;
 
-create policy "transactions: membros autenticados têm acesso total"
-  on public.transactions for all
-  to authenticated
-  using (true)
-  with check (true);
-
-create policy "valuation_snapshots: membros autenticados têm acesso total"
-  on public.valuation_snapshots for all
-  to authenticated
-  using (true)
-  with check (true);
+-- as funções dos triggers não são para chamar pela API (/rpc)
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.set_updated_at() from public, anon, authenticated;

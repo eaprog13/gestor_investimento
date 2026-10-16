@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { criarClienteServidor } from "@/lib/supabase/server";
+import { ehMembro } from "@/lib/security/sessionActivity";
+import { iniciarAtividade, marcarRecuperacao } from "@/lib/security/sessionCookies";
 
 export const runtime = "nodejs";
 
@@ -21,16 +23,29 @@ export async function GET(pedido: Request) {
   const url = new URL(pedido.url);
   const codigo = url.searchParams.get("code");
 
-  if (codigo) {
-    const supabase = await criarClienteServidor();
-    const { error } = await supabase.auth.exchangeCodeForSession(codigo);
-    if (error) {
-      console.error("[/auth/callback] falha ao trocar o código por sessão:", error.message);
-      const urlErro = new URL("/forgot-password", url.origin);
-      urlErro.searchParams.set("erro", "link_invalido");
-      return NextResponse.redirect(urlErro);
-    }
+  const urlErro = new URL("/forgot-password", url.origin);
+  urlErro.searchParams.set("erro", "link_invalido");
+
+  // Sem código não há sessão nova: não há nada a fazer aqui.
+  if (!codigo) return NextResponse.redirect(urlErro);
+
+  const supabase = await criarClienteServidor();
+  const { data, error } = await supabase.auth.exchangeCodeForSession(codigo);
+  if (error || !data.user) {
+    console.error("[/auth/callback] falha ao trocar o código por sessão:", error?.message);
+    return NextResponse.redirect(urlErro);
   }
+  // Só membros da família (ver ehMembro em src/lib/security/sessionActivity.ts).
+  if (!ehMembro(data.user)) {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(urlErro);
+  }
+
+  // A sessão do link de recuperação conta como um login (timeout de
+  // inatividade a partir de agora) e pode definir a nova password sem a
+  // atual durante 15 min — ver src/app/change-password/actions.ts.
+  await iniciarAtividade(data.user.id);
+  await marcarRecuperacao(data.user.id);
 
   return NextResponse.redirect(new URL("/change-password", url.origin));
 }

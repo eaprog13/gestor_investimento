@@ -2,12 +2,27 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { construirCabecalhosSeguranca } from "@/lib/security/headers";
 import { comSegurancaReforcada } from "@/lib/security/cookies";
+import {
+  COOKIE_ATIVIDADE,
+  COOKIE_RECUPERACAO,
+  MAX_AGE_ATIVIDADE_S,
+  criarValorAtividade,
+  ehMembro,
+  verificarAtividade,
+} from "@/lib/security/sessionActivity";
 
 const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/callback"];
 
-// 30 minutos sem nenhum pedido — ver secção "Timeout de sessão por
-// inatividade" abaixo.
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+// Um NextResponse.redirect novo não leva os cookies escritos em "resposta"
+// (a sessão renovada, ou os cookies apagados pelo signOut) — sem isto, uma
+// sessão terminada aqui continuava com os cookies antigos no browser.
+function redirecionarComCookies(destino: URL, resposta: NextResponse) {
+  const redirecionamento = NextResponse.redirect(destino);
+  for (const cookie of resposta.cookies.getAll()) {
+    redirecionamento.cookies.set(cookie);
+  }
+  return redirecionamento;
+}
 
 function ehCaminhoPublico(caminho: string) {
   return PUBLIC_PATHS.some((p) => caminho === p || caminho.startsWith(`${p}/`));
@@ -61,26 +76,27 @@ export async function proxy(pedido: NextRequest) {
   } = await supabase.auth.getUser();
   let user = userSupabase;
 
-  // ── Timeout de sessão por inatividade ─────────────────────────────────
+  // ── Timeout de sessão e membros da família ─────────────────────────────
   // O Supabase, por si só, não desloga por inatividade — o refresh token
-  // renova-se sozinho enquanto o browser continuar a fazer pedidos, mesmo
-  // ao fim de dias. Guardamos a hora do último pedido autenticado num
-  // cookie próprio; se passar mais de INACTIVITY_TIMEOUT_MS sem nenhum
-  // pedido, força logout e exige novo login, mesmo que o token Supabase em
-  // si ainda fosse válido.
+  // renova-se sozinho enquanto o browser continuar a fazer pedidos. A sessão
+  // termina aqui se: a conta não for de um membro (signup público), o cookie
+  // de atividade faltar, for adulterado ou de outro utilizador, a sessão
+  // estiver parada há mais de 30 min ou tiver mais de 12 h — ver
+  // src/lib/security/sessionActivity.ts.
   if (user) {
-    const ultimaAtividade = Number(pedido.cookies.get("last_activity")?.value ?? 0);
-    const inativoDemasiadoTempo = ultimaAtividade > 0 && Date.now() - ultimaAtividade > INACTIVITY_TIMEOUT_MS;
+    const agora = Date.now();
+    const atividade = verificarAtividade(pedido.cookies.get(COOKIE_ATIVIDADE)?.value, user.id, agora);
 
-    if (inativoDemasiadoTempo) {
+    if (!ehMembro(user) || !atividade.valida) {
       await supabase.auth.signOut();
       user = null;
-      resposta.cookies.delete("last_activity");
+      resposta.cookies.delete(COOKIE_ATIVIDADE);
+      resposta.cookies.delete(COOKIE_RECUPERACAO);
     } else {
       resposta.cookies.set({
-        name: "last_activity",
-        value: String(Date.now()),
-        ...comSegurancaReforcada({ path: "/", maxAge: INACTIVITY_TIMEOUT_MS / 1000 }),
+        name: COOKIE_ATIVIDADE,
+        value: criarValorAtividade(user.id, atividade.inicio, agora),
+        ...comSegurancaReforcada({ path: "/", sameSite: "lax", maxAge: MAX_AGE_ATIVIDADE_S }),
       });
     }
   }
@@ -90,11 +106,11 @@ export async function proxy(pedido: NextRequest) {
   if (!user && !ehCaminhoPublico(caminho)) {
     const urlLogin = new URL("/login", pedido.url);
     urlLogin.searchParams.set("from", caminho);
-    return NextResponse.redirect(urlLogin);
+    return redirecionarComCookies(urlLogin, resposta);
   }
 
   if (user && caminho === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", pedido.url));
+    return redirecionarComCookies(new URL("/dashboard", pedido.url), resposta);
   }
 
   return resposta;

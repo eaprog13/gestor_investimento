@@ -19,11 +19,28 @@ function SubmitButton() {
   );
 }
 
-export function ChangePasswordForm() {
+// pedirPasswordAtual: falso só na sessão aberta pelo link de recuperação (ver change-password/actions.ts)
+export function ChangePasswordForm({ pedirPasswordAtual }: { pedirPasswordAtual: boolean }) {
   const [state, formAction] = useActionState(changePassword, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {pedirPasswordAtual ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="currentPassword" className="text-sm font-medium text-[var(--text-primary)]">
+            Password atual
+          </label>
+          <input
+            id="currentPassword"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)] focus:ring-1 focus:ring-[var(--series-1)]"
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-1.5">
         <label htmlFor="password" className="text-sm font-medium text-[var(--text-primary)]">
           Nova password

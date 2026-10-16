@@ -182,18 +182,41 @@ extra.
   não há rotas de API expostas nesta app (só Server Actions), por isso não
   há "CORS" a configurar; o comportamento por omissão (só o próprio
   domínio) já é o que se quer.
-- **Rate limiting do login** (`src/lib/security/rateLimit.ts`): 10
-  tentativas/minuto por email+IP, via Upstash Redis. Sem
-  `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` definidos (ex.: dev
-  local) fica inativo — configura-os em produção (ver `.env.example`).
-- **Sessão:** cookies HTTP-only geridos pelo Supabase Auth — o JWT nunca
-  fica acessível a JavaScript no browser.
+- **Só membros da família entram** (`ehMembro()` em
+  `src/lib/security/sessionActivity.ts`): a conta tem de ter
+  `app_metadata.membro = true`, que só a Admin API (chave service_role)
+  consegue escrever. **A app não cria contas:** criam-se só no painel do
+  Supabase (Authentication → Users → Add user, com "Auto Confirm User") e
+  marcam-se com `supabase/membros.sql` no SQL Editor (ou
+  `npm run membros -- marcar <email>`). O registo público tem de estar
+  desligado no Supabase (Authentication → Sign In / Providers → "Allow new
+  users to sign up"); mesmo que alguém o volte a ligar, uma conta criada
+  assim nunca entra, porque não tem a marca.
+- **Base de dados fechada às chaves públicas** (`supabase/policies.sql`):
+  RLS ligado e nenhuma policy para `anon`/`authenticated` — a app só usa a
+  chave service_role, no servidor; pela API REST do Supabase, com a chave
+  anon (que é pública), não se lê nem escreve nada.
+- **Rate limiting** (`src/lib/security/rateLimit.ts`), no login e na
+  confirmação da password atual: 10 tentativas/minuto por email+IP e 20/10
+  min só por email (apanha ataques a partir de vários IPs). Com Upstash
+  (`UPSTASH_REDIS_REST_URL`/`TOKEN` — obrigatório em produção) o limite é
+  partilhado por todas as instâncias; sem ele fica em memória, por
+  instância (nunca sem limite nenhum).
+- **Sessão** (`src/proxy.ts` + `src/lib/security/sessionActivity.ts`):
+  cookies HTTP-only geridos pelo Supabase Auth (o JWT nunca fica acessível
+  a JavaScript) e um cookie de atividade assinado com HMAC. A sessão
+  termina com **30 min sem atividade** ou ao fim de **12 h**, e também se
+  esse cookie faltar ou for adulterado.
+- **Password:** mínimo 10 caracteres com maiúscula, minúscula e número;
+  mudá-la pede a password atual (só o link de recuperação, durante 15
+  min, a dispensa) e termina as outras sessões abertas.
 
 ## A correr localmente
 
 ```bash
 cp .env.example .env   # preenche com as credenciais do teu projeto Supabase
 npm install
+npm run membros          # lista as contas; dá acesso com: npm run membros -- marcar <email>
 npm run seed            # cria o utilizador inicial (e dados de demo, se SEED_DEMO_DATA=true)
 npm run dev
 ```

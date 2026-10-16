@@ -39,9 +39,11 @@ async function seedInitialUser() {
 
   const existente = existentes.users.find((u) => u.email === email);
   if (existente) {
+    // app_metadata.membro: sem ele a conta não entra na app (ver src/lib/security/sessionActivity.ts)
     const { error } = await bd.auth.admin.updateUserById(existente.id, {
       password,
       user_metadata: { name },
+      app_metadata: { membro: true },
     });
     if (error) throw new Error(error.message);
     console.log(`Utilizador "${email}" atualizado.`);
@@ -53,6 +55,7 @@ async function seedInitialUser() {
     password,
     email_confirm: true,
     user_metadata: { name },
+    app_metadata: { membro: true },
   });
   if (error) throw new Error(error.message);
   console.log(`Utilizador "${email}" criado.`);
