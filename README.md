@@ -25,16 +25,15 @@ services nem em rotas.
 
 ```
 src/core/types.ts               tipos de domínio (Asset, Transaction, ValuationSnapshot, Profile)
-src/core/ports/                  interfaces (contratos) de dados e identidade
+src/core/ports/                  interfaces (contratos) de dados, identidade e autenticação
 src/core/services/               regras de negócio — testadas com fakes em memória
-src/adapters/supabase/           implementação dos ports sobre o Supabase
+src/adapters/supabase/           implementação dos ports sobre o Supabase (dados, Auth, cliente service_role)
+src/adapters/upstash/            limite de tentativas partilhado (Redis)
+src/adapters/memoria/            limite de tentativas em memória (reserva sem Upstash)
 src/composition/container.ts     raiz de composição — único sítio que escolhe "Supabase"
-src/lib/supabase/admin.ts        cliente Supabase (chave service_role) — todo o acesso a dados
-src/lib/supabase/server.ts       cliente Supabase (chave anon, sessão do pedido) — só autenticação
-src/lib/supabase/client.ts       cliente Supabase de browser — disponível, não usado no login atual
-src/lib/auth/session.ts          getSession()/requireSession() a partir da sessão Supabase Auth
+src/lib/auth/session.ts          getSession()/requireSession() — sessão do pedido, só membros
 src/lib/security/headers.ts      cabeçalhos de segurança (CSP, HSTS, ...) — ver "Segurança"
-src/lib/security/rateLimit.ts    limite de tentativas de login
+src/composition/autenticacao*.ts escolhe o fornecedor de autenticação e o limitador de tentativas
 src/proxy.ts                     renova a sessão, protege rotas e aplica os cabeçalhos de segurança
 src/lib/calculations.ts          cálculo puro do livro-razão (cost basis, YTD, alocação...) — testado sem BD
 src/lib/data.ts                  leituras já compostas para as páginas
@@ -196,8 +195,8 @@ extra.
   RLS ligado e nenhuma policy para `anon`/`authenticated` — a app só usa a
   chave service_role, no servidor; pela API REST do Supabase, com a chave
   anon (que é pública), não se lê nem escreve nada.
-- **Rate limiting** (`src/lib/security/rateLimit.ts`), no login e na
-  confirmação da password atual: 10 tentativas/minuto por email+IP e 20/10
+- **Rate limiting** (`LIMITES_TENTATIVAS` em `src/core/services/authService.ts`), no login, na
+  confirmação da password atual e no pedido de recuperação: 10 tentativas/minuto por email+IP e 20/10
   min só por email (apanha ataques a partir de vários IPs). Com Upstash
   (`UPSTASH_REDIS_REST_URL`/`TOKEN` — obrigatório em produção) o limite é
   partilhado por todas as instâncias; sem ele fica em memória, por
@@ -210,6 +209,36 @@ extra.
 - **Password:** mínimo 10 caracteres com maiúscula, minúscula e número;
   mudá-la pede a password atual (só o link de recuperação, durante 15
   min, a dispensa) e termina as outras sessões abertas.
+
+## Trocar de stack
+
+A lógica não depende do fornecedor. O `src/core/` (tipos, regras de negócio
+e **regras de segurança**) só conhece interfaces (`src/core/ports/`) — nunca
+o Supabase, o Upstash nem o Next.js:
+
+| Para trocar | Escrever | E mudar |
+|---|---|---|
+| Base de dados | um adapter por repositório de `core/ports/repositories.ts` | `src/composition/container.ts` |
+| Autenticação | um `FornecedorAutenticacao` (`core/ports/auth.ts`) | `src/composition/autenticacao.ts` |
+| Limite de tentativas | um `LimitadorTentativas` (`core/ports/auth.ts`) | `src/composition/autenticacaoPedido.ts` |
+| Framework web | as páginas, as Server Actions, o proxy e os cookies | — o `core/` e os `adapters/` ficam |
+
+As regras de segurança estão em `src/core/services/authService.ts` e são
+testadas com fornecedores falsos (`authService.test.ts`), por isso valem
+para qualquer implementação: limite de tentativas antes de experimentar a
+password, só membros entram (uma conta sem a marca fecha logo a sessão e
+responde como password errada), a password atual é obrigatória para a
+mudar (exceto pelo link de recuperação) e as outras sessões terminam, e o
+pedido de recuperação responde sempre igual. O timeout da sessão
+(`src/lib/security/sessionActivity.ts`) e o reforço dos cookies
+(HTTP-only/Secure, aplicado na composição) também não dependem do fornecedor.
+
+O que um fornecedor novo tem de garantir por si:
+- **membro** só pode ser escrito por um administrador (no Supabase:
+  `app_metadata`, nunca `user_metadata`);
+- a base de dados **não** fica acessível com credenciais públicas (no
+  Supabase: `supabase/policies.sql`) e o registo público fica desligado;
+- `utilizadorAtual()` valida a sessão no fornecedor, não só no cookie.
 
 ## A correr localmente
 

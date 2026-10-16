@@ -1,15 +1,13 @@
-import type { CookieOptions } from "@supabase/ssr";
+import type { OpcoesCookie } from "@/core/ports/auth";
 
 /**
- * O @supabase/ssr define, por omissão, "httpOnly: false" nos cookies de
- * sessão (para o caso de o cliente de browser precisar de os ler via
- * document.cookie) — esta app nunca faz isso, a sessão só é lida no
- * servidor (ver src/lib/supabase/server.ts e src/proxy.ts). Reforçamos
- * aqui: "httpOnly" bloqueia leitura por JavaScript no browser (mitiga
- * roubo de sessão via XSS) sem quebrar nada, e "secure" impede o cookie
- * de ser enviado fora de HTTPS.
+ * Todos os cookies de sessão são HTTP-only (o JavaScript do browser não os
+ * lê — mitiga roubo de sessão via XSS) e, em produção, Secure (só por
+ * HTTPS). O @supabase/ssr, por omissão, criava-os com "httpOnly: false";
+ * esta app nunca precisa de os ler no browser. Aplicado a qualquer
+ * fornecedor em src/composition/autenticacao.ts.
  */
-export function comSegurancaReforcada(opcoes: CookieOptions): CookieOptions {
+export function comSegurancaReforcada(opcoes: OpcoesCookie): OpcoesCookie {
   return {
     ...opcoes,
     httpOnly: true,

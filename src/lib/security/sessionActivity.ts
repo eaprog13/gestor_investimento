@@ -103,14 +103,3 @@ export function recuperacaoValida(valor: string | undefined, userId: string, ago
     Number(expiraTexto) > agora
   );
 }
-
-// ── Membros da família ─────────────────────────────────────────────────────
-// Só contas marcadas por ti têm app_metadata.membro = true (supabase/membros.sql
-// no SQL Editor, "npm run membros -- marcar", ou "npm run seed"). O app_metadata
-// só pode ser escrito com privilégios de administrador — quem criasse conta
-// pelo signup público do Supabase (com a chave anon, que é pública) não o
-// consegue pôr, e por isso não entra, mesmo com email e password válidos.
-
-export function ehMembro(user: { app_metadata?: Record<string, unknown> } | null | undefined): boolean {
-  return user?.app_metadata?.membro === true;
-}

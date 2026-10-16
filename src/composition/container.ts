@@ -1,5 +1,5 @@
 import "server-only";
-import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { criarClienteAdmin } from "@/adapters/supabase/clienteAdmin";
 import type { Dependencias } from "@/core/deps";
 import { RepositorioPerfilSupabase } from "@/adapters/supabase/profileRepository";
 import { RepositorioAtivoSupabase } from "@/adapters/supabase/assetRepository";

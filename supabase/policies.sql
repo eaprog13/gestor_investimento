@@ -2,7 +2,7 @@
 -- Row Level Security — base de dados FECHADA às chaves públicas.
 --
 -- Esta app só lê e escreve dados no servidor, com a chave service_role (que
--- ignora o RLS — ver src/lib/supabase/admin.ts e src/composition/container.ts).
+-- ignora o RLS — ver src/adapters/supabase/clienteAdmin.ts e src/composition/container.ts).
 -- A chave anon é pública (vai no bundle do browser, para o "esqueci a
 -- password") e um utilizador "authenticated" pode ser QUALQUER conta do
 -- Supabase Auth — incluindo uma criada pelo signup público, se estiver

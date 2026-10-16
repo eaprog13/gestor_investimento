@@ -4,8 +4,8 @@
  * serverless/edge, onde o middleware do Express não se aplica — isto é o
  * mecanismo nativo recomendado para o mesmo efeito).
  *
- * "connect-src" inclui o domínio do Supabase (API + Auth) — sem isto o
- * browser bloquearia os próprios pedidos que o cliente Supabase faz.
+ * "connect-src 'self'": o browser não fala com nenhum serviço externo — a
+ * autenticação corre toda no servidor (ver src/composition/autenticacao.ts).
  */
 export function construirCabecalhosSeguranca(nonce: string, isDev: boolean) {
   const csp = [
@@ -17,7 +17,9 @@ export function construirCabecalhosSeguranca(nonce: string, isDev: boolean) {
     "style-src 'self' 'unsafe-inline'", // Tailwind injeta estilos inline
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    // o browser só fala com o próprio site: a autenticação (incluindo o
+    // "esqueci a password") corre toda no servidor
+    "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

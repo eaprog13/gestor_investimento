@@ -2,34 +2,29 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import { criarClienteServidor } from "@/lib/supabase/server";
-import { requireSession } from "@/lib/auth/session";
-import { verificarLimiteLogin } from "@/lib/security/rateLimit";
+import { autenticacaoDoPedido, limitadorTentativas } from "@/composition/autenticacaoPedido";
+import { mudarPassword, type ResultadoMudarPassword } from "@/core/services/authService";
 import { COOKIE_RECUPERACAO } from "@/lib/security/sessionActivity";
 import { obterIp, veioDaRecuperacao } from "@/lib/security/sessionCookies";
+import { requireSession } from "@/lib/auth/session";
 import { newPasswordSchema } from "@/lib/validation";
 
 export type ActionState = { status: "idle" | "error"; message?: string };
 
 const DESTINO = "/dashboard";
 
-// Confirma a password atual com um cliente à parte, sem cookies: não mexe na
-// sessão do pedido. A sessão de verificação que o Supabase cria fecha-se logo
-// (scope "local": só essa, não as outras do utilizador).
-async function passwordAtualCerta(email: string, password: string): Promise<boolean> {
-  const verificador = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error } = await verificador.auth.signInWithPassword({ email, password });
-  if (error) return false;
-  await verificador.auth.signOut({ scope: "local" });
-  return true;
-}
+const MENSAGENS: Record<Exclude<ResultadoMudarPassword, { ok: true }>["motivo"], string> = {
+  "sem-sessao": "A sessão terminou. Entra outra vez.",
+  "falta-password-atual": "Indica a password atual.",
+  limite: "Demasiadas tentativas. Tenta de novo daqui a alguns minutos.",
+  "password-atual-errada": "A password atual está errada.",
+  falhou: "Não foi possível alterar a password. Tenta pedir um novo link.",
+};
 
+// As regras (password atual, limite, terminar as outras sessões) estão em
+// core/services/authService.ts.
 export async function changePassword(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  // Exige sessão — normal (já tinhas sessão) ou temporária, estabelecida
-  // pelo link de recuperação em /auth/callback (troca de código PKCE).
+  // Exige sessão — normal ou a temporária do link de recuperação (/auth/callback).
   const session = await requireSession();
 
   const parsed = newPasswordSchema.safeParse({
@@ -40,33 +35,20 @@ export async function changePassword(_prevState: ActionState, formData: FormData
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  // Numa sessão normal, mudar a password pede a atual: quem apanhasse uma
-  // sessão aberta (computador partilhado, cookie roubado) não fica com a
-  // conta. Só a sessão do link de recuperação (15 min) dispensa a atual.
-  if (!(await veioDaRecuperacao(session.sub))) {
-    const atual = formData.get("currentPassword");
-    if (typeof atual !== "string" || atual === "") {
-      return { status: "error", message: "Indica a password atual." };
-    }
-    const { sucesso } = await verificarLimiteLogin(session.email.toLowerCase(), await obterIp());
-    if (!sucesso) {
-      return { status: "error", message: "Demasiadas tentativas. Tenta de novo daqui a alguns minutos." };
-    }
-    if (!(await passwordAtualCerta(session.email, atual))) {
-      return { status: "error", message: "A password atual está errada." };
-    }
+  const atual = formData.get("currentPassword");
+  const resultado = await mudarPassword(
+    { autenticacao: await autenticacaoDoPedido(), limitador: limitadorTentativas() },
+    {
+      novaPassword: parsed.data.password,
+      passwordAtual: typeof atual === "string" && atual !== "" ? atual : null,
+      veioDaRecuperacao: await veioDaRecuperacao(session.sub),
+      ip: await obterIp(),
+    },
+  );
+  if (!resultado.ok) {
+    return { status: "error", message: MENSAGENS[resultado.motivo] };
   }
 
-  const supabase = await criarClienteServidor();
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) {
-    return { status: "error", message: "Não foi possível alterar a password. Tenta pedir um novo link." };
-  }
-
-  // As outras sessões abertas desta conta (outros browsers, ou quem tivesse
-  // a password antiga) terminam; esta continua.
-  await supabase.auth.signOut({ scope: "others" });
   (await cookies()).delete(COOKIE_RECUPERACAO);
-
   redirect(DESTINO);
 }

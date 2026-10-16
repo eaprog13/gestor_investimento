@@ -5,8 +5,8 @@
 --    password e "Auto Confirm User" ligado.
 -- 2. Aqui, no SQL Editor: troca o email e corre. Sem esta marca
 --    (app_metadata.membro), a conta não entra na app — é o que impede uma
---    conta criada pelo signup público de entrar (ver ehMembro() em
---    src/lib/security/sessionActivity.ts).
+--    conta criada pelo signup público de entrar (ver
+--    src/adapters/supabase/authProvider.ts e core/services/authService.ts).
 -- ════════════════════════════════════════════════════════════════════════
 
 -- uma ou mais contas, separadas por vírgulas

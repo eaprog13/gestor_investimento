@@ -1,5 +1,5 @@
 // Gere quem é membro da família (app_metadata.membro) — só membros entram na
-// app, ver ehMembro() em src/lib/security/sessionActivity.ts.
+// app, ver src/adapters/supabase/authProvider.ts e core/services/authService.ts.
 //
 //   npm run membros                          lista as contas e quem é membro
 //   npm run membros -- marcar a@x.pt b@y.pt  marca estas contas como membros

@@ -6,7 +6,7 @@ import type { FornecedorGestaoIdentidade } from "@/core/ports/identity";
  * Gestão de identidade sobre o Supabase Auth (Admin API): só o nome da conta.
  * A app NÃO cria contas — criam-se no painel do Supabase (Authentication →
  * Users) e marcam-se como membros (app_metadata.membro, ver
- * supabase/membros.sql e ehMembro() em src/lib/security/sessionActivity.ts).
+ * supabase/membros.sql e paraUtilizadorAutenticado() em ./authProvider.ts).
  */
 export class FornecedorGestaoIdentidadeSupabase implements FornecedorGestaoIdentidade {
   constructor(private readonly authAdmin: SupabaseClient["auth"]["admin"]) {}

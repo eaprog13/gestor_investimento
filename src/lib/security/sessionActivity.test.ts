@@ -5,7 +5,6 @@ import {
   VALIDADE_RECUPERACAO_MS,
   criarValorAtividade,
   criarValorRecuperacao,
-  ehMembro,
   recuperacaoValida,
   verificarAtividade,
 } from "./sessionActivity";
@@ -89,14 +88,5 @@ describe("recuperacaoValida", () => {
     const atividade = criarValorAtividade(UTILIZADOR, AGORA, AGORA + VALIDADE_RECUPERACAO_MS);
     const [id, , ultima, assinatura] = atividade.split(".");
     expect(recuperacaoValida([id, ultima, assinatura].join("."), UTILIZADOR, AGORA)).toBe(false);
-  });
-});
-
-describe("ehMembro", () => {
-  it("só aceita contas marcadas pela app (app_metadata.membro = true)", () => {
-    expect(ehMembro({ app_metadata: { membro: true } })).toBe(true);
-    expect(ehMembro({ app_metadata: { provider: "email" } })).toBe(false);
-    expect(ehMembro({ app_metadata: { membro: "true" } })).toBe(false);
-    expect(ehMembro(null)).toBe(false);
   });
 });

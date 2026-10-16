@@ -1,13 +1,12 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { construirCabecalhosSeguranca } from "@/lib/security/headers";
 import { comSegurancaReforcada } from "@/lib/security/cookies";
+import { criarAutenticacao } from "@/composition/autenticacao";
 import {
   COOKIE_ATIVIDADE,
   COOKIE_RECUPERACAO,
   MAX_AGE_ATIVIDADE_S,
   criarValorAtividade,
-  ehMembro,
   verificarAtividade,
 } from "@/lib/security/sessionActivity";
 
@@ -31,7 +30,7 @@ function ehCaminhoPublico(caminho: string) {
 /**
  * 1) Aplica cabeçalhos de segurança (CSP com nonce, HSTS, etc. — ver
  *    src/lib/security/headers.ts) a todas as respostas.
- * 2) Renova a sessão Supabase a cada pedido (necessário para manter os
+ * 2) Renova a sessão a cada pedido (necessário para manter os
  *    cookies atualizados em Server Components — ver
  *    https://supabase.com/docs/guides/auth/server-side/nextjs) e protege
  *    as rotas privadas.
@@ -53,31 +52,18 @@ export async function proxy(pedido: NextRequest) {
     resposta.headers.set(chave, valor);
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(nome: string) {
-          return pedido.cookies.get(nome)?.value;
-        },
-        set(nome: string, valor: string, opcoes: CookieOptions) {
-          resposta.cookies.set({ name: nome, value: valor, ...comSegurancaReforcada(opcoes) });
-        },
-        remove(nome: string, opcoes: CookieOptions) {
-          resposta.cookies.set({ name: nome, value: "", ...comSegurancaReforcada(opcoes) });
-        },
-      },
-    }
-  );
+  // A sessão vive nos cookies do pedido; o fornecedor (Supabase hoje) é
+  // escolhido em src/composition/autenticacao.ts, que também reforça os
+  // cookies (HTTP-only, Secure).
+  const autenticacao = criarAutenticacao({
+    ler: (nome) => pedido.cookies.get(nome)?.value,
+    escrever: (nome, valor, opcoes) => resposta.cookies.set({ name: nome, value: valor, ...opcoes }),
+  });
 
-  const {
-    data: { user: userSupabase },
-  } = await supabase.auth.getUser();
-  let user = userSupabase;
+  let user = await autenticacao.utilizadorAtual();
 
   // ── Timeout de sessão e membros da família ─────────────────────────────
-  // O Supabase, por si só, não desloga por inatividade — o refresh token
+  // O fornecedor (Supabase hoje), por si só, não desloga por inatividade — o refresh token
   // renova-se sozinho enquanto o browser continuar a fazer pedidos. A sessão
   // termina aqui se: a conta não for de um membro (signup público), o cookie
   // de atividade faltar, for adulterado ou de outro utilizador, a sessão
@@ -87,8 +73,8 @@ export async function proxy(pedido: NextRequest) {
     const agora = Date.now();
     const atividade = verificarAtividade(pedido.cookies.get(COOKIE_ATIVIDADE)?.value, user.id, agora);
 
-    if (!ehMembro(user) || !atividade.valida) {
-      await supabase.auth.signOut();
+    if (!user.membro || !atividade.valida) {
+      await autenticacao.sair();
       user = null;
       resposta.cookies.delete(COOKIE_ATIVIDADE);
       resposta.cookies.delete(COOKIE_RECUPERACAO);
