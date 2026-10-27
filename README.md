@@ -13,8 +13,19 @@ por categoria e desempenho ao longo do tempo.
 - **[zod](https://zod.dev)** — validação dos formulários.
 - **[Vitest](https://vitest.dev)** — testes da lógica de negócio.
 
-App fechada, sem registo público: os membros da família são adicionados por
-quem já tem acesso (`/settings/users`), via Admin API do Supabase Auth.
+App fechada, sem registo público: as contas criam-se no painel do Supabase
+(ou com `npm run seed`, para a primeira) e só entram depois de marcadas como
+membro da família — ver "Segurança". Em `/settings/users` vê-se e edita-se
+quem já tem acesso.
+
+## Requisitos
+
+- Node.js 20.9 ou superior (exigido pelo Next.js 16).
+- Um projeto [Supabase](https://supabase.com) (o plano grátis chega).
+- Opcional, mas obrigatório em produção: uma base Redis no
+  [Upstash](https://upstash.com) para o limite de tentativas de login.
+- Opcional: uma chave grátis da [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
+  para cotações de ETF/ações (ver "Cotações ao vivo").
 
 ## Arquitetura
 
@@ -44,7 +55,7 @@ supabase/                        schema.sql, policies.sql, seed.ts, relatorio_sa
 
 **Nota sobre `src/proxy.ts`:** no Next.js 16 a convenção `middleware.ts` foi
 renomeada para `proxy.ts` (mesmo comportamento, só o nome do ficheiro/export
-mudou — ver `node_modules/next/dist/docs/.../file-conventions/proxy.md`).
+mudou).
 
 ## Base de dados e autenticação (Supabase)
 
@@ -61,12 +72,19 @@ do Supabase:
      topo do ficheiro sobre porque não é scoped por utilizador).
 3. **Project Settings → API** → copia `URL`, `anon public key` e
    `service_role key` para `.env` (ver `.env.example`).
-4. Cria o primeiro utilizador:
+4. **Authentication → Sign In / Providers** → desliga "Allow new users to
+   sign up" (as contas criam-se só pelo painel ou pela Admin API).
+5. **Authentication → URL Configuration** → em "Site URL" põe o endereço da
+   app (ex: `http://localhost:3000` em desenvolvimento) e acrescenta
+   `<endereço da app>/auth/callback` aos "Redirect URLs" — sem isto o link
+   de "recuperar password" não funciona.
+6. Cria o primeiro utilizador (já fica marcado como membro):
    ```bash
    npm run seed   # lê INITIAL_USER_EMAIL/PASSWORD/NAME do .env
    ```
    (ou pela dashboard: **Authentication → Users → Add user**, com
-   `user_metadata.name` definido — o trigger cria o perfil automaticamente).
+   `user_metadata.name` definido — o trigger cria o perfil automaticamente;
+   depois marca-o como membro com `npm run membros -- marcar <email>`).
 
 **Porquê sem ORM:** o schema real do Postgres (constraints, índices, RLS,
 triggers) fica como fonte da verdade, sem uma camada de tradução/migrations
@@ -157,9 +175,9 @@ taxaReal = (1 + taxaNominal) / (1 + taxaInflaçãoAcumulada) − 1
 Positiva = o valor cresceu mais do que a inflação (ganhaste poder de
 compra); negativa = cresceu menos, mesmo que o valor nominal tenha subido.
 
-**Cobertura:** inicialmente só "Poupanças"/"Fundo de Emergência" (pedido
-explícito, para validar o KPI primeiro nestas duas categorias) — alargado
-depois, a pedido, a todos os ativos do portefólio.
+**Cobertura:** começou só com "Poupanças"/"Fundo de Emergência", para
+validar o KPI nessas duas categorias, e foi depois alargado a todos os
+ativos do portefólio.
 
 **Campo "Finalidade"** (coluna `purpose`, `src/core/types.ts`) — marca um
 ativo como sendo (ou albergando) o fundo de emergência/poupança
@@ -178,9 +196,10 @@ extra.
   Express, adaptado ao runtime serverless/edge do Next.js.
 - **CSRF em Server Actions:** o Next.js já compara a origem de cada pedido
   a uma Server Action com o domínio do host, e rejeita se não coincidir —
-  não há rotas de API expostas nesta app (só Server Actions), por isso não
-  há "CORS" a configurar; o comportamento por omissão (só o próprio
-  domínio) já é o que se quer.
+  não há API de dados exposta nesta app (só Server Actions e o
+  `GET /auth/callback` do link de recuperação), por isso não há "CORS" a
+  configurar; o comportamento por omissão (só o próprio domínio) já é o que
+  se quer.
 - **Só membros da família entram** (`ehMembro()` em
   `src/lib/security/sessionActivity.ts`): a conta tem de ter
   `app_metadata.membro = true`, que só a Admin API (chave service_role)
@@ -245,12 +264,23 @@ O que um fornecedor novo tem de garantir por si:
 ```bash
 cp .env.example .env   # preenche com as credenciais do teu projeto Supabase
 npm install
-npm run membros          # lista as contas; dá acesso com: npm run membros -- marcar <email>
-npm run seed            # cria o utilizador inicial (e dados de demo, se SEED_DEMO_DATA=true)
+npm run seed             # cria o utilizador inicial, já como membro (e dados de demo, se SEED_DEMO_DATA=true)
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000).
+Abre [http://localhost:3000](http://localhost:3000) e entra com o
+`INITIAL_USER_EMAIL` / `INITIAL_USER_PASSWORD` que definiste no `.env`
+(usa uma password forte — as regras de "Segurança" só são verificadas
+quando a mudas dentro da app).
+
+Para dar acesso a mais pessoas: cria a conta no painel do Supabase
+(Authentication → Users → Add user, com "Auto Confirm User") e depois
+
+```bash
+npm run membros                          # lista as contas e quem é membro
+npm run membros -- marcar <email>        # dá acesso
+npm run membros -- desmarcar <email>     # tira o acesso
+```
 
 **Antes de começar a usar a app a sério** (dados reais, não de teste):
 se alguma vez correste `npm run seed` com `SEED_DEMO_DATA=true`, corre
@@ -276,8 +306,16 @@ Cobrem a lógica de negócio pura, sem precisar de ligação à base de dados:
   capital investido em anos anteriores como se fosse ganho deste ano
   (corrigido — ver comentário em `computeYtd`).
 - `src/lib/validation.test.ts` — regras dos formulários (zod).
+- `src/lib/inflation.test.ts` — variação do índice de preços, taxas
+  equivalentes por período e poder de compra (equação de Fisher).
 - `src/core/services/userService.test.ts` — email duplicado não chega a
   chamar a Admin API do Supabase, usando um fake do port `RepositorioPerfil`.
+- `src/core/services/authService.test.ts` — regras de segurança do login
+  (limite de tentativas, só membros, mudança e recuperação de password).
+- `src/lib/security/sessionActivity.test.ts` — timeout da sessão e cookie de
+  atividade assinado.
+- `src/adapters/**/*.test.ts` — adapter de autenticação do Supabase e
+  limitador de tentativas em memória.
 
 ## Deploy
 
@@ -286,8 +324,10 @@ Pensada para viver num subdomínio próprio (ex: `investimento.oteudominio.com`)
 - **Vercel (recomendado).** Liga o repositório, adiciona o subdomínio ao
   projeto (Settings → Domains) e aponta um CNAME no DNS do teu domínio —
   o Vercel emite o certificado TLS automaticamente. Define as variáveis de
-  ambiente do Supabase (ver `.env.example`) no projeto; o deploy é
-  automático a cada push.
+  ambiente do `.env.example` no projeto (incluindo as do Upstash e, se a
+  usares, a da Alpha Vantage); o deploy é automático a cada push. Atualiza
+  também o "Site URL" e os "Redirect URLs" do Supabase para o endereço de
+  produção.
 - **Subdomínio próprio (VPS / servidor de casa).** `npm run build` + `npm run start`
   (porta configurável via `PORT`) atrás de um reverse proxy (ex: Caddy ou
   nginx) com HTTPS.
