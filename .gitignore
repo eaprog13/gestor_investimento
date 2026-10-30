@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# instruções locais para assistentes de código (o AGENTS.md fica versionado)
+CLAUDE.md
